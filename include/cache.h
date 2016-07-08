@@ -29,19 +29,20 @@ class Cache {
       }
     }
     
-    void connect(const std::string& host, int port) {
+    Cache& connect(const std::string& host, int port) {
       assert(!is_connected());
       host_ = host;
       port_ = port;
       rc_ = redisConnectWithTimeout(host_.c_str(), port_, {1,500000});
+      return *this;
     }
-    bool is_connected() const {
-      return rc_ != NULL && !rc_->err;
-    }
-
     Cache& write_through(bool wt) {
       wt_ = wt;
       return *this;
+    }
+
+    bool is_connected() const {
+      return rc_ != NULL && !rc_->err;
     }
 
     bool contains(const Key& k) {
