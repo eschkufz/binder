@@ -1,0 +1,18 @@
+#!/bin/bash
+
+if [[ $# -ne 1 ]]; then
+  echo "Usage: db_start <port>"
+  exit 1
+fi
+
+service redis_$1 status > /dev/null
+if [[ $? -eq 0 ]]; then
+  echo "ERROR: Server is currently running!"
+  exit 1
+fi
+
+rm -f /etc/redis/redis_$1.conf
+rm -f /etc/init.d/redis_$1
+rm -rf /var/lib/redis_$1
+
+echo "Successfully deleted server"

@@ -160,7 +160,6 @@ class Cache {
       const auto ks = ck.write();
       const auto rep = (redisReply*)redisCommand(rc_, "GET %b", ks.c_str(), ks.length());
       const std::string vs(rep->str, rep->len);
-
       if (vs == "(nil)") {
         return false;
       }

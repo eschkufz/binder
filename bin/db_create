@@ -1,0 +1,32 @@
+#!/bin/bash
+
+if [[ $# -ne 1 ]]; then
+  echo "Usage: db_start <port>"
+  exit 1
+fi
+
+CONF=/etc/redis/redis_$1.conf
+INIT=/etc/init.d/redis_$1
+
+if [ -f $CONF ]; then
+  echo "ERROR: A server already exists on this port!"
+  exit 1
+fi
+
+cp /etc/redis/redis.conf $CONF
+sed -i 's/^pidfile.*/pidfile \/var\/run\/redis_'$1'.pid/g' $CONF
+sed -i 's/^port.*/port '$1'/g' $CONF
+sed -i 's/^logfile.*/logfile \/var\/log\/redis\/redis_'$1'.log/g' $CONF
+sed -i 's/^dir.*/dir \/var\/lib\/redis_'$1'/g' $CONF
+
+cp /etc/init.d/redis-server $INIT
+sed -i 's/redis-server/redis_'$1'/g' $INIT
+sed -i 's/^DAEMON=.*/DAEMON=\/usr\/bin\/redis-server/g' $INIT
+sed -i 's/^PIDFILE.*/PIDFILE=\/var\/run\/redis_'$1'.pid/g' $INIT
+
+mkdir -p /var/lib/redis_$1
+
+chown redis.redis /var/lib/redis_$1
+chown redis.redis $CONF
+
+echo "Successfully created server"

@@ -1,6 +1,9 @@
 # binder
 A fuzzy database 
 
+Dependencies:
+  $ sudo apt-get install redis-server libhiredis-dev
+
 There are 3 layers of abstraction here:
 
 1. Key/Val       These are the types that are exposed to the user

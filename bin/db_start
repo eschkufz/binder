@@ -1,0 +1,18 @@
+#!/bin/bash
+
+if [[ $# -ne 1 ]]; then
+  echo "Usage: db_start <port>"
+  exit 1
+fi
+
+service redis_$1 status > /dev/null
+if [[ $? -ne 0 ]]; then
+  service redis_$1 start
+  if [[ $? -ne 0 ]]; then
+    echo "ERROR: Unable to start server!"
+    exit 1
+  fi
+  echo "Successfully started server"
+else
+  echo "Server is already running!"
+fi
