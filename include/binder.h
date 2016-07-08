@@ -1,5 +1,5 @@
-#ifndef BINDER_INCLUDE_CACHE_H
-#define BINDER_INCLUDE_CACHE_H
+#ifndef BINDER_INCLUDE_BINDER_H
+#define BINDER_INCLUDE_BINDER_H
 
 #include <cassert>
 #include <hiredis/hiredis.h>
@@ -11,16 +11,12 @@ namespace binder {
 template <typename Key, typename Val, typename CKey, typename CVal>
 class Cache {
   public:
-    Cache() : rc_(NULL), wt_(false) { }
+    Cache() : rc_(NULL), wt_(false) {}
     Cache(const Cache& rhs) : cache_(rhs.cache_), wt_(rhs.wt_) {
       connect(rhs.host_, rhs.port_); 
     }
-    Cache(const Cache&& rhs) : Cache() {
+    Cache(Cache&& rhs) : Cache() {
       swap(*this, rhs);
-    }
-    Cache& operator=(const Cache rhs) {
-      swap(*this, rhs);
-      return *this;
     }
     virtual ~Cache() {
       if (is_connected()) {
@@ -50,7 +46,7 @@ class Cache {
       begin();
 
       const auto ck = cmap(k);
-      const auto res = (cache_.find(ck) != cache_.end()) : true : redis_exists(ck);
+      const auto res = cache_.find(ck) != cache_.end() ? true : redis_exists(ck);
 
       end();
       return res;
@@ -108,7 +104,7 @@ class Cache {
       return v;
     }
     void put(const Key& k, const Val& v) {
-      assert(is_connected();
+      assert(is_connected());
       begin();
 
       const auto ck = cmap(k);
@@ -145,7 +141,7 @@ class Cache {
     // Map a user val to a cache val
     virtual CVal vmap(const Val& v) = 0;
     // Merge a cache val with a pre-existing val
-    virtual void merge(const CVal& v1, Cval& v2) = 0;
+    virtual void merge(const CVal& v1, CVal& v2) = 0;
     // The default val taht you would like to associate with a key
     virtual CVal init(const Key& k, const CKey& ck) = 0;
     // Invert the results of a cache lookup
