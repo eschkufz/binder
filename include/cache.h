@@ -11,8 +11,16 @@ namespace binder {
 template <typename Key, typename Val, typename CKey, typename CVal>
 class Cache {
   public:
-    Cache(const char* host, int port) : wt_(false) {
-      rc_ = redisConnectWithTimeout(host, port, {1,500000});
+    Cache() : rc_(NULL), wt_(false) { }
+    Cache(const Cache& rhs) : cache_(rhs.cache_), wt_(rhs.wt_) {
+      connect(rhs.host_, rhs.port_); 
+    }
+    Cache(const Cache&& rhs) : Cache() {
+      swap(*this, rhs);
+    }
+    Cache& operator=(const Cache rhs) {
+      swap(*this, rhs);
+      return *this;
     }
     virtual ~Cache() {
       if (is_connected()) {
@@ -21,6 +29,12 @@ class Cache {
       }
     }
     
+    void connect(const std::string& host, int port) {
+      assert(!is_connected());
+      host_ = host;
+      port_ = port;
+      rc_ = redisConnectWithTimeout(host_.c_str(), port_, {1,500000});
+    }
     bool is_connected() const {
       return rc_ != NULL && !rc_->err;
     }
@@ -113,6 +127,15 @@ class Cache {
       end();
     }
 
+    friend void swap(Cache& lhs, Cache& rhs) {
+      using std::swap;
+      swap(lhs.rc_, rhs.rc_);
+      swap(lhs.host_, rhs.host_);
+      swap(lhs.port_, rhs.port_);
+      swap(lhs.cache_, rhs.cache_);
+      swap(lhs.wt_, rhs.wt_);
+    }
+
   protected:
     // Optional state reset at the beginning of an operation
     virtual void begin() = 0;
@@ -145,8 +168,11 @@ class Cache {
       }
     };
 
-    std::unordered_map<CKey, Line, Hash, Equal> cache_;
     redisContext* rc_;
+    std::string host_;
+    int port_;
+
+    std::unordered_map<CKey, Line, Hash, Equal> cache_;
     bool wt_;
 
     bool redis_exists(const CKey& ck) {
