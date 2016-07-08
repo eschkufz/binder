@@ -29,4 +29,6 @@ mkdir -p /var/lib/redis_$1
 chown redis.redis /var/lib/redis_$1
 chown redis.redis $CONF
 
+update-rc.d redis_$1 defaults
+
 echo "Successfully created server"

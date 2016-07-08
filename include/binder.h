@@ -3,6 +3,7 @@
 
 #include <cassert>
 #include <hiredis/hiredis.h>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 
@@ -79,7 +80,7 @@ class Cache {
     }
     void flush() {
       assert(is_connected());
-      for (const auto& line : cache_) {
+      for (auto& line : cache_) {
         if (line.second.dirty) {
           redis_set(line.first, line.second.cval);
           line.second.dirty = false;
@@ -95,10 +96,10 @@ class Cache {
       if (itr == cache_.end()) {
         auto cv = init(k, ck);
         redis_get(ck, cv);
-        itr = cache_.insert(std::make_pair(ck, {cv,false})).first;
+        itr = cache_.insert({ck, {cv,false}}).first;
         evict();
       }
-      const auto v = vunmap(itr->second.cval);
+      const auto v = vunmap(k, ck, itr->second.cval);
 
       end();
       return v;
@@ -112,12 +113,12 @@ class Cache {
       auto itr = cache_.find(ck);
       if (itr == cache_.end()) {
         const auto i = init(k, ck);
-        itr = cache_.insert(std::make_pair(ck, {i,false})).first;
+        itr = cache_.insert({ck, {i,false}}).first;
         evict();
       }
       merge(cv, itr->second.cval);
       if (wt_) {
-        redis_set(cv, itr->second.cval);
+        redis_set(ck, itr->second.cval);
       } 
       itr->second.dirty = !wt_;
 
@@ -135,7 +136,7 @@ class Cache {
 
   protected:
     // Optional state reset at the beginning of an operation
-    virtual void begin() = 0;
+    virtual void begin() {}
     // Map a user key to a cache key
     virtual CKey cmap(const Key& k) = 0;
     // Map a user val to a cache val
@@ -147,48 +148,47 @@ class Cache {
     // Invert the results of a cache lookup
     virtual Val vunmap(const Key& k, const CKey& ck, const CVal& cv) = 0;
     // Optional cleanup at the end of an operation
-    virtual void end() = 0;
+    virtual void end() {}
 
   private:
     struct Line {
       CVal cval;
       bool dirty;
     };
-    struct Hash {
-      size_t operator()(const CKey& ck) const {
-        return ck.hash();
-      }
-    };
 
     redisContext* rc_;
     std::string host_;
     int port_;
 
-    std::unordered_map<CKey, Line, Hash> cache_;
+    std::unordered_map<CKey, Line> cache_;
     bool wt_;
 
     bool redis_exists(const CKey& ck) {
-      const auto ks = ck.write();
-      const auto rep = (redisReply*)redisCommand(rc_, "EXISTS %b", ks.c_str(), ks.length());  
+      std::stringstream ks;
+      ks << ck;
+      const auto rep = (redisReply*)redisCommand(rc_, "EXISTS %b", ks.str().c_str(), ks.str().length());  
       const auto res = rep->integer == 1;
       freeReplyObject(rep);
       return res;
     }
     bool redis_get(const CKey& ck, CVal& cv) {
-      const auto ks = ck.write();
-      const auto rep = (redisReply*)redisCommand(rc_, "GET %b", ks.c_str(), ks.length());
-      const std::string vs(rep->str, rep->len);
-      if (vs == "(nil)") {
+      std::stringstream ks;
+      ks << ck;
+      const auto rep = (redisReply*)redisCommand(rc_, "GET %b", ks.str().c_str(), ks.str().length());
+      std::stringstream vs({rep->str, (size_t)rep->len}); 
+      if (vs.str() == "(nil)") {
         return false;
       }
-      cv.read(vs);
+      vs >> cv;
       return true;
     }
     void redis_set(const CKey& ck, const CVal& cv) {
-      const auto ks = ck.write();
-      const auto vs = cv.write();
+      std::stringstream ks;
+      ks << ck;
+      std::stringstream vs;
+      vs << cv;
       const auto rep = (redisReply*)
-        redisCommand(rc_, "SET %b %b", ks.c_str(), ks.length(), vs.c_str(), vs.length());
+        redisCommand(rc_, "SET %b %b", ks.str().c_str(), ks.str().length(), vs.str().c_str(), vs.str().length());
       freeReplyObject(rep);
     }
 
