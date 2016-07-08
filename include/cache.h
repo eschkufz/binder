@@ -163,17 +163,12 @@ class Cache {
         return ck.hash();
       }
     };
-    struct Equal {
-      bool operator()(const CKey& ck1, const CKey& ck2) const {
-        return ck1.equals(ck2);
-      }
-    };
 
     redisContext* rc_;
     std::string host_;
     int port_;
 
-    std::unordered_map<CKey, Line, Hash, Equal> cache_;
+    std::unordered_map<CKey, Line, Hash> cache_;
     bool wt_;
 
     bool redis_exists(const CKey& ck) {
