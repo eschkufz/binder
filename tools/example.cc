@@ -35,11 +35,6 @@ class MyCache : public Cache<string, int, string, int> {
 };
 
 int main(int argc, char** argv) {
-  if (argc != 3) {
-    cout << "Usage: " << argv[0] << " <host> <port>" << endl;
-    exit(1);  
-  }
-
   MyCache cache;
   cache.connect(argv[1], atoi(argv[2]));
 
