@@ -13,6 +13,9 @@ fi
 
 rm -f /etc/redis/redis_$1.conf
 rm -f /etc/init.d/redis_$1
+rm -f /var/log/redis/redis_$1.log
 rm -rf /var/lib/redis_$1
+
+systemctl daemon-reload
 
 echo "Successfully deleted server"
