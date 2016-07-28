@@ -42,6 +42,9 @@ class Cache {
       return rc_ != NULL && !rc_->err;
     }
 
+    void clear() {
+      cache_.clear();
+    }
     bool contains(const Key& k) {
       assert(is_connected());
       begin();
