@@ -26,6 +26,7 @@ class Cache {
 
     bool is_connected() const;
 
+    void clear();
     bool contains(const Key& k);
     void fetch(const Key& k);
     void flush(const Key& k);
