@@ -22,6 +22,7 @@ sed -i 's/^dir.*/dir \/var\/lib\/redis_'$1'/g' $CONF
 cp /etc/init.d/redis-server $INIT
 sed -i 's/redis-server/redis_'$1'/g' $INIT
 sed -i 's/^DAEMON=.*/DAEMON=\/usr\/bin\/redis-server/g' $INIT
+sed -i 's/^DAEMON_ARGS=.*/DAEMON_ARGS=\/etc\/redis\/redis_'$1.conf'/g' $INIT
 sed -i 's/^PIDFILE.*/PIDFILE=\/var\/run\/redis_'$1'.pid/g' $INIT
 
 mkdir -p /var/lib/redis_$1
