@@ -35,7 +35,7 @@ class MyCache : public Cache<string, int, string, int> {
 };
 
 int main(int argc, char** argv) {
-  (void)argc;
+  (void) argc;
 
   MyCache cache;
   cache.connect(argv[1], atoi(argv[2]));
