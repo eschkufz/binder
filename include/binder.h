@@ -38,6 +38,9 @@ class Cache {
       return *this;
     }
 
+    size_t size() const {
+      return cache_.size();
+    }
     bool is_connected() const {
       return rc_ != NULL && !rc_->err;
     }

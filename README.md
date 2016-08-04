@@ -24,6 +24,7 @@ class Cache {
     Cache& connect(const std::string& host, int port);
     Cache& write_through(bool wt);
 
+    size_t size() const;
     bool is_connected() const;
 
     void clear();
