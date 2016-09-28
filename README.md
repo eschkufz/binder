@@ -51,21 +51,17 @@ class MyCache : public<Key, Val, CKey, CVal> {
     virtual CVal init(const Key& k, const CKey& ck);
     virtual Val vunmap(const Key& k, const CKey& ck, const CVal& cv);
     virtual void op_end();
+
+    virtual void cwrite(ostream& os, const CKey& ck);
+    virtual void vwrite(ostream& os, const CVal& cv);
+    virtual void vread(istream& is, CVal& cv);
 };
 ```
-
-Additionally, the following methods must be defined:
+Additionally, the following method must be defined:
 ```
-std::ostream& operator<<(std::ostream& os, const CKey& ck);
-std::istream& operator>>(std::istream& is, CKey& ck);
-
 namespace std {
 template <>
 struct hash<CKey> {
   size_t operator()(const CKey& ck) const;
 };
 }
-
-std::ostream& operator<<(std::ostream& os, const CVal& cv);
-std::istream& operator>>(std::istream& is, CVal& cv);
-```
