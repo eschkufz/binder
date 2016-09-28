@@ -27,6 +27,9 @@ class Cache {
     size_t size() const;
     bool is_connected() const;
 
+    line_type begin() const;
+    line_type end() const;
+
     void clear();
     bool contains(const Key& k);
     void fetch(const Key& k);
@@ -41,13 +44,13 @@ Classes derived from Cache should support the following methods:
 ```
 class MyCache : public<Key, Val, CKey, CVal> {
   protected:
-    virtual void begin();
+    virtual void op_begin();
     virtual CKey cmap(const Key& k);
     virtual CVal vmap(const Val& v);
     virtual void merge(const CVal& v1, CVal& v2);
     virtual CVal init(const Key& k, const CKey& ck);
     virtual Val vunmap(const Key& k, const CKey& ck, const CVal& cv);
-    virtual void end();
+    virtual void op_end();
 };
 ```
 
