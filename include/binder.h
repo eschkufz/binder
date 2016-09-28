@@ -3,6 +3,7 @@
 
 #include <cassert>
 #include <hiredis/hiredis.h>
+#include <iterator>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -11,6 +12,12 @@ namespace binder {
 
 template <typename Key, typename Val, typename CKey, typename CVal>
 class Cache {
+  private:
+    struct CacheLine {
+      CVal cval;
+      bool dirty;
+    };
+
   public:
     Cache() : rc_(NULL), wt_(false) {}
     Cache(const Cache& rhs) : cache_(rhs.cache_), wt_(rhs.wt_) {
@@ -45,22 +52,65 @@ class Cache {
       return rc_ != NULL && !rc_->err;
     }
 
+    typedef std::pair<const CKey&, const CVal&> line_type;
+
+    class const_iterator : public std::iterator<std::forward_iterator_tag, line_type> {
+      friend class Cache;
+      private:
+        const_iterator(typename std::unordered_map<CKey, CacheLine>::const_iterator itr) : itr_(itr) { }
+
+      public:
+        const_iterator& operator++() {
+          itr_++;
+          return *this;
+        }
+        const_iterator operator++(int) {
+          const auto ret = *this;
+          ++(*this);
+          return ret;
+        }
+
+        bool operator==(const const_iterator& rhs) const {
+          return itr_ == rhs.itr_;
+        }
+        bool operator!=(const const_iterator& rhs) const {
+          return itr_ != rhs.itr_;
+        }
+
+        line_type operator*() const {
+          return {itr_->first, itr_->second.cval};
+        }
+        line_type* operator->() const {
+          return nullptr;
+        }
+      
+      private: 
+        typename std::unordered_map<CKey, CacheLine>::const_iterator itr_;
+    };
+
+    const_iterator begin() const {
+      return const_iterator(cache_.begin());
+    }
+    const_iterator end() const {
+      return const_iterator(cache_.end());
+    }
+
     void clear() {
       cache_.clear();
     }
     bool contains(const Key& k) {
       assert(is_connected());
-      begin();
+      op_begin();
 
       const auto ck = cmap(k);
       const auto res = cache_.find(ck) != cache_.end() ? true : redis_exists(ck);
 
-      end();
+      op_end();
       return res;
     }
     void fetch(const Key& k) {
       assert(is_connected());
-      begin();
+      op_begin();
 
       const auto ck = cmap(k);
       auto cv = init(k, ck);
@@ -69,11 +119,11 @@ class Cache {
         evict();
       }
 
-      end();
+      op_end();
     }
     void flush(const Key& k) {
       assert(is_connected());
-      begin();
+      op_begin();
 
       const auto ck = cmap(k);
       const auto itr = cache_.find(ck);
@@ -82,7 +132,7 @@ class Cache {
         itr->second.dirty = false;
       }
 
-      end();
+      op_end();
     }
     void flush() {
       assert(is_connected());
@@ -95,7 +145,7 @@ class Cache {
     }
     Val get(const Key& k) {
       assert(is_connected());
-      begin();
+      op_begin();
 
       const auto ck = cmap(k);
       auto itr = cache_.find(ck);
@@ -107,12 +157,12 @@ class Cache {
       }
       const auto v = vunmap(k, ck, itr->second.cval);
 
-      end();
+      op_end();
       return v;
     }
     void put(const Key& k, const Val& v) {
       assert(is_connected());
-      begin();
+      op_begin();
 
       const auto ck = cmap(k);
       const auto cv = vmap(v);
@@ -128,7 +178,7 @@ class Cache {
       } 
       itr->second.dirty = !wt_;
 
-      end();
+      op_end();
     }
 
     friend void swap(Cache& lhs, Cache& rhs) {
@@ -142,7 +192,7 @@ class Cache {
 
   protected:
     // Optional state reset at the beginning of an operation
-    virtual void begin() {}
+    virtual void op_begin() {}
     // Map a user key to a cache key
     virtual CKey cmap(const Key& k) = 0;
     // Map a user val to a cache val
@@ -154,19 +204,14 @@ class Cache {
     // Invert the results of a cache lookup
     virtual Val vunmap(const Key& k, const CKey& ck, const CVal& cv) = 0;
     // Optional cleanup at the end of an operation
-    virtual void end() {}
+    virtual void op_end() {}
 
   private:
-    struct Line {
-      CVal cval;
-      bool dirty;
-    };
-
     redisContext* rc_;
     std::string host_;
     int port_;
 
-    std::unordered_map<CKey, Line> cache_;
+    std::unordered_map<CKey, CacheLine> cache_;
     bool wt_;
 
     bool redis_exists(const CKey& ck) {
