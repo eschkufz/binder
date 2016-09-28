@@ -11,14 +11,6 @@ class MyCache : public Cache<string, int, string, int> {
     virtual ~MyCache() {}
 
   protected:
-    virtual string kinit() {
-      return "";
-    }
-    virtual int vinit(const string& k, const string& ck) {
-      (void) k;
-      (void) ck;
-      return 0;
-    }
     virtual string cmap(const string& k) {
       auto ret = k;
       transform(ret.begin(), ret.end(), ret.begin(), ::tolower);
