@@ -11,7 +11,7 @@ class MyCache : public Cache<string, int, string, int> {
     virtual ~MyCache() {}
 
   protected:
-    virtual string cmap(const string& k) {
+    virtual string kmap(const string& k) {
       auto ret = k;
       transform(ret.begin(), ret.end(), ret.begin(), ::tolower);
       return ret;
@@ -22,27 +22,34 @@ class MyCache : public Cache<string, int, string, int> {
     virtual void merge(const int& v1, int& v2) {
       v2 += v1;
     }
-    virtual int vunmap(const string& k, const string& ck, const int& cv) {
-      (void) k;
-      (void) ck;
-      return cv;
-    }
 };
 
 int main(int argc, char** argv) {
   (void) argc;
 
   MyCache cache;
-  cache.connect(argv[1], atoi(argv[2]));
 
+  cache.connect(argv[1], atoi(argv[2]));
   if (!cache.is_connected()) {
     cout << "Unable to connect to database at " << argv[1] << ":" << argv[2] << endl;
     exit(1);
   }
   cout << "Connected to database at " << argv[1] << ":" << argv[2] << endl;
 
+  cache.fetch();
+  cout << "Loaded " << cache.size() << " elements from database:" << endl;
+  for (const auto& line : cache) {
+    cout << line.first << " -> " << line.second << endl;
+  }
+
   string s = "";
   while (cin >> s) {
+    if (s == "FLUSH") {
+      cache.flush();
+      cout << "Flushed cache" << endl;
+      continue;
+    }
+
     cout << (cache.contains(s) ? "[   ] " : "[new] ");
     cout << "\"" << s << "\" ";
     cout << cache.get(s);
