@@ -206,6 +206,19 @@ class Cache {
     // Optional cleanup at the end of an operation
     virtual void op_end() {}
 
+    // Serialize a cache key to a stream
+    virtual void kwrite(std::ostream& os, const CKey& ck) {
+      os << ck;
+    }
+    // Serialize a cache value to a stream
+    virtual void vwrite(std::ostream& os, const CVal& cv) {
+      os << cv;
+    } 
+    // Deserialize a cache val from a stream
+    virtual void vread(std::istream& is, CVal& cv) {
+      is >> cv;
+    }
+
   private:
     redisContext* rc_;
     std::string host_;
@@ -216,7 +229,7 @@ class Cache {
 
     bool redis_exists(const CKey& ck) {
       std::stringstream ks;
-      ks << ck;
+      kwrite(ks, ck);
       const auto rep = (redisReply*)redisCommand(rc_, "EXISTS %b", ks.str().c_str(), ks.str().length());  
       const auto res = rep->integer == 1;
       freeReplyObject(rep);
@@ -224,21 +237,21 @@ class Cache {
     }
     bool redis_get(const CKey& ck, CVal& cv) {
       std::stringstream ks;
-      ks << ck;
+      kwrite(ks, ck);
       const auto rep = (redisReply*)redisCommand(rc_, "GET %b", ks.str().c_str(), ks.str().length());
       std::stringstream vs({rep->str, (size_t)rep->len}); 
       if (vs.str() == "(nil)") {
         return false;
       }
-      vs >> cv;
+      vread(vs, cv);
       freeReplyObject(rep);
       return true;
     }
     void redis_set(const CKey& ck, const CVal& cv) {
       std::stringstream ks;
-      ks << ck;
+      kwrite(ks, ck);
       std::stringstream vs;
-      vs << cv;
+      vwrite(vs, cv);
       const auto rep = (redisReply*)
         redisCommand(rc_, "SET %b %b", ks.str().c_str(), ks.str().length(), vs.str().c_str(), vs.str().length());
       freeReplyObject(rep);
