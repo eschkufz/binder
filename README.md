@@ -46,6 +46,7 @@ class MyCache : public<Key, Val, CKey, CVal> {
   protected:
     virtual CKey kinit();
     virtual CVal vinit(const Key& k, const CKey& ck);
+    
     virtual CKey cmap(const Key& k) = 0;
     virtual CVal vmap(const Val& v) = 0;
     virtual void merge(const CVal& v1, CVal& v2) = 0;
