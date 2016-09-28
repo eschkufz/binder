@@ -231,6 +231,7 @@ class Cache {
         return false;
       }
       vs >> cv;
+      freeReplyObject(rep);
       return true;
     }
     void redis_set(const CKey& ck, const CVal& cv) {
