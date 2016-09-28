@@ -30,6 +30,7 @@ class Cache {
     line_type end() const;
 
     void clear();
+    void fetch();
     void flush();
 
     virtual bool contains(const Key& k);
@@ -47,13 +48,16 @@ class MyCache : public<Key, Val, CKey, CVal> {
     virtual CKey kinit();
     virtual CVal vinit(const Key& k, const CKey& ck);
     
-    virtual CKey cmap(const Key& k) = 0;
+    virtual CKey kmap(const Key& k) = 0;
     virtual CVal vmap(const Val& v) = 0;
-    virtual void merge(const CVal& v1, CVal& v2) = 0;
-    virtual Val vunmap(const Key& k, const CKey& ck, const CVal& cv) = 0;
 
-    virtual void cwrite(ostream& os, const CKey& ck);
+    virtual void merge(const CVal& v1, CVal& v2) = 0;
+    virtual Val vunmap(const Key& k, const CKey& ck, const CVal& cv);
+
+    virtual void kwrite(ostream& os, const CKey& ck);
     virtual void vwrite(ostream& os, const CVal& cv);
+
+    virtual void kread(istream& is, CKey& cv);
     virtual void vread(istream& is, CVal& cv);
 };
 ```

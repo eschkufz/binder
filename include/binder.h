@@ -19,8 +19,8 @@ class Cache {
     };
 
   public:
-    Cache() : rc_(NULL), wt_(false) {}
-    Cache(const Cache& rhs) : cache_(rhs.cache_), wt_(rhs.wt_) {
+    Cache() : rc_(NULL), wt_(false), scan_(nullptr) {}
+    Cache(const Cache& rhs) : cache_(rhs.cache_), wt_(rhs.wt_), scan_(nullptr) {
       connect(rhs.host_, rhs.port_); 
     }
     Cache(Cache&& rhs) : Cache() {
@@ -30,6 +30,9 @@ class Cache {
       if (is_connected()) {
         flush();
         redisFree(rc_);
+      }
+      if (scan_ != nullptr) {
+        freeReplyObject(scan_);
       }
     }
     
@@ -96,6 +99,19 @@ class Cache {
     void clear() {
       cache_.clear();
     }
+    void fetch() {
+      assert(is_connected());
+
+      auto ck = kinit();
+      for (redis_scan(); redis_scan(ck);) {
+        if (cache_.find(ck) == cache_.end()) {
+          auto cv = vinit();
+          redis_get(ck, cv);
+          cache_.insert({ck, {cv,false}});
+          evict();
+        }
+      }
+    }
     void flush() {
       assert(is_connected());
 
@@ -110,7 +126,7 @@ class Cache {
     virtual bool contains(const Key& k) {
       assert(is_connected());
 
-      const auto ck = cmap(k);
+      const auto ck = kmap(k);
       const auto res = cache_.find(ck) != cache_.end() ? true : redis_exists(ck);
 
       return res;
@@ -118,7 +134,7 @@ class Cache {
     virtual void fetch(const Key& k) {
       assert(is_connected());
 
-      const auto ck = cmap(k);
+      const auto ck = kmap(k);
       auto cv = vinit(k, ck);
       if (redis_get(ck, cv)) {
         cache_[ck] = {cv,false};
@@ -128,7 +144,7 @@ class Cache {
     virtual void flush(const Key& k) {
       assert(is_connected());
 
-      const auto ck = cmap(k);
+      const auto ck = kmap(k);
       const auto itr = cache_.find(ck);
       if (itr != cache_.end() && itr->second.dirty) {
         redis_set(ck, itr->second.cval);
@@ -138,7 +154,7 @@ class Cache {
     virtual Val get(const Key& k) {
       assert(is_connected());
 
-      const auto ck = cmap(k);
+      const auto ck = kmap(k);
       auto itr = cache_.find(ck);
       if (itr == cache_.end()) {
         auto cv = vinit(k, ck);
@@ -153,7 +169,7 @@ class Cache {
     virtual void put(const Key& k, const Val& v) {
       assert(is_connected());
 
-      const auto ck = cmap(k);
+      const auto ck = kmap(k);
       const auto cv = vmap(v);
       auto itr = cache_.find(ck);
       if (itr == cache_.end()) {
@@ -175,6 +191,9 @@ class Cache {
       swap(lhs.port_, rhs.port_);
       swap(lhs.cache_, rhs.cache_);
       swap(lhs.wt_, rhs.wt_);
+      swap(lhs.scan_, rhs.scan_);
+      swap(lhs.token_, rhs.token_);
+      swap(lhs.idx_, rhs.idx_);
     }
 
   protected:
@@ -182,20 +201,30 @@ class Cache {
     virtual CKey kinit() {
       return CKey();
     }
+    // The default val
+    virtual CVal vinit() {
+      return CVal();
+    }
     // The default val to associate with a key
     virtual CVal vinit(const Key& k, const CKey& ck) {
       (void) k;
       (void) ck;
       return CVal();
     }
+
     // Map a user key to a cache key
-    virtual CKey cmap(const Key& k) = 0;
+    virtual CKey kmap(const Key& k) = 0;
     // Map a user val to a cache val
     virtual CVal vmap(const Val& v) = 0;
+    
     // Merge a cache val with a pre-existing val
     virtual void merge(const CVal& v1, CVal& v2) = 0;
     // Invert the results of a cache lookup
-    virtual Val vunmap(const Key& k, const CKey& ck, const CVal& cv) = 0;
+    virtual Val vunmap(const Key& k, const CKey& ck, const CVal& cv) {
+      (void) k;
+      (void) ck;
+      return cv;
+    }
 
     // Serialize a cache key to a stream
     virtual void kwrite(std::ostream& os, const CKey& ck) {
@@ -205,18 +234,30 @@ class Cache {
     virtual void vwrite(std::ostream& os, const CVal& cv) {
       os << cv;
     } 
+    
+    // Deserialize a cache key from a stream
+    virtual void kread(std::istream& is, CKey& ck) {
+      is >> ck;
+    }
     // Deserialize a cache val from a stream
     virtual void vread(std::istream& is, CVal& cv) {
       is >> cv;
     }
 
   private:
+    // Connection state
     redisContext* rc_;
     std::string host_;
     int port_;
 
+    // Cache state
     std::unordered_map<CKey, CacheLine> cache_;
     bool wt_;
+
+    // Scan state
+    redisReply* scan_;
+    size_t token_;
+    size_t idx_;
 
     bool redis_exists(const CKey& ck) {
       std::stringstream ks;
@@ -246,6 +287,30 @@ class Cache {
       const auto rep = (redisReply*)
         redisCommand(rc_, "SET %b %b", ks.str().c_str(), ks.str().length(), vs.str().c_str(), vs.str().length());
       freeReplyObject(rep);
+    }
+    void redis_scan() {
+      if (scan_ != nullptr) {
+        freeReplyObject(scan_);
+      }
+      scan_ = (redisReply*)redisCommand(rc_, "SCAN 0");
+      token_ = scan_->element[0]->integer;
+      idx_ = 0;
+    }
+    bool redis_scan(CKey& ck) {
+      if (idx_ == scan_->element[1]->elements) {
+        freeReplyObject(scan_);
+        scan_ = (redisReply*)redisCommand(rc_, "SCAN %i", token_);
+        token_ = scan_->element[0]->integer;
+        idx_ = 0;
+        if (token_ == 0) {
+          return false;
+        }
+      }
+
+      const auto ptr = scan_->element[1]->element[idx_++];
+      std::stringstream ks({ptr->str, (size_t)ptr->len});
+      kread(ks, ck);
+      return true;
     }
 
     void evict() {
