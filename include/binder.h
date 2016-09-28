@@ -113,7 +113,7 @@ class Cache {
       op_begin();
 
       const auto ck = cmap(k);
-      auto cv = init(k, ck);
+      auto cv = vinit(k, ck);
       if (redis_get(ck, cv)) {
         cache_[ck] = {cv,false};
         evict();
@@ -150,7 +150,7 @@ class Cache {
       const auto ck = cmap(k);
       auto itr = cache_.find(ck);
       if (itr == cache_.end()) {
-        auto cv = init(k, ck);
+        auto cv = vinit(k, ck);
         redis_get(ck, cv);
         itr = cache_.insert({ck, {cv,false}}).first;
         evict();
@@ -168,7 +168,7 @@ class Cache {
       const auto cv = vmap(v);
       auto itr = cache_.find(ck);
       if (itr == cache_.end()) {
-        const auto i = init(k, ck);
+        const auto i = vinit(k, ck);
         itr = cache_.insert({ck, {i,false}}).first;
         evict();
       }
@@ -193,14 +193,16 @@ class Cache {
   protected:
     // Optional state reset at the beginning of an operation
     virtual void op_begin() {}
+    // The default key
+    virtual CKey kinit() = 0;
+    // The default val to associate with a key
+    virtual CVal vinit(const Key& k, const CKey& ck) = 0;
     // Map a user key to a cache key
     virtual CKey cmap(const Key& k) = 0;
     // Map a user val to a cache val
     virtual CVal vmap(const Val& v) = 0;
     // Merge a cache val with a pre-existing val
     virtual void merge(const CVal& v1, CVal& v2) = 0;
-    // The default val taht you would like to associate with a key
-    virtual CVal init(const Key& k, const CKey& ck) = 0;
     // Invert the results of a cache lookup
     virtual Val vunmap(const Key& k, const CKey& ck, const CVal& cv) = 0;
     // Optional cleanup at the end of an operation

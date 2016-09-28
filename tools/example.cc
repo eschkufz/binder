@@ -11,6 +11,14 @@ class MyCache : public Cache<string, int, string, int> {
     virtual ~MyCache() {}
 
   protected:
+    virtual string kinit() {
+      return "";
+    }
+    virtual int vinit(const string& k, const string& ck) {
+      (void) k;
+      (void) ck;
+      return 0;
+    }
     virtual string cmap(const string& k) {
       auto ret = k;
       transform(ret.begin(), ret.end(), ret.begin(), ::tolower);
@@ -21,11 +29,6 @@ class MyCache : public Cache<string, int, string, int> {
     }
     virtual void merge(const int& v1, int& v2) {
       v2 += v1;
-    }
-    virtual int init(const string& k, const string& ck) {
-      (void) k;
-      (void) ck;
-      return 0;
     }
     virtual int vunmap(const string& k, const string& ck, const int& cv) {
       (void) k;
