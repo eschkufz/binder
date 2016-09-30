@@ -46,6 +46,7 @@ Classes derived from Cache should support the following methods:
 class MyCache : public<Key, Val, CKey, CVal> {
   protected:
     virtual CKey kinit();
+    virtual CVal vinit();
     virtual CVal vinit(const Key& k, const CKey& ck);
     
     virtual CKey kmap(const Key& k) = 0;
