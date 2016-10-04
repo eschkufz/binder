@@ -192,7 +192,6 @@ class Cache {
       swap(lhs.cache_, rhs.cache_);
       swap(lhs.wt_, rhs.wt_);
       swap(lhs.scan_, rhs.scan_);
-      swap(lhs.token_, rhs.token_);
       swap(lhs.idx_, rhs.idx_);
     }
 
@@ -256,7 +255,6 @@ class Cache {
 
     // Scan state
     redisReply* scan_;
-    size_t token_;
     size_t idx_;
 
     bool redis_exists(const CKey& ck) {
@@ -293,18 +291,19 @@ class Cache {
         freeReplyObject(scan_);
       }
       scan_ = (redisReply*)redisCommand(rc_, "SCAN 0");
-      token_ = scan_->element[0]->integer;
       idx_ = 0;
     }
     bool redis_scan(CKey& ck) {
+      assert(scan_ != nullptr);
+
       if (idx_ == scan_->element[1]->elements) {
-        freeReplyObject(scan_);
-        scan_ = (redisReply*)redisCommand(rc_, "SCAN %i", token_);
-        token_ = scan_->element[0]->integer;
-        idx_ = 0;
-        if (token_ == 0) {
+        const size_t token = atoi(scan_->element[0]->str);
+        if (token == 0) {
           return false;
         }
+        freeReplyObject(scan_);
+        scan_ = (redisReply*)redisCommand(rc_, "SCAN %i", token);
+        idx_ = 0;
       }
 
       const auto ptr = scan_->element[1]->element[idx_++];
