@@ -35,7 +35,7 @@ class Database {
             scan(rhs.ctok_, rhs.idx_);
           }
         }
-        const_iterator(const_iterator&& rhs) {
+        const_iterator(const_iterator&& rhs) : const_iterator() {
           swap(*this, rhs);
         }
         const_iterator& operator=(const_iterator rhs) {
