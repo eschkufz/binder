@@ -85,10 +85,6 @@ class Cache {
       return *this;
     }
 
-    Database& get_database() const {
-      return *db_;
-    }
-
     size_t size() const {
       return contents_.size();
     }
@@ -156,13 +152,14 @@ class Cache {
         if (db_get(ck, cv)) {
           itr = contents_.insert({ck, {cv, false}}).first;
         } else {
-          itr = contents_.insert({ck, {vinit(k, ck), true}}).first;
+          itr = contents_.insert({ck, {vinit(k, ck), !wt_}}).first;
+          if (wt_) {
+            db_set(ck, itr->second.cval);
+          }
         }
         evict();
       }
-
-      const auto v = vunmap(k, ck, itr->second.cval);
-      return v;
+      return vunmap(k, ck, itr->second.cval);
     }
     virtual void put(const Key& k, const Val& v) {
       const auto ck = kmap(k);
