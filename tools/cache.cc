@@ -35,15 +35,94 @@ int main() {
   MyCache cache(&db);
   cache.write_through();
 
-  string s = "";
-  while (cin >> s) {
-    cout << (cache.contains(s) ? "[   ] " : "[new] ");
-    cout << "\"" << s << "\" ";
-    cout << cache.get(s);
-    cache.put(s, 1);
-    cout << " -> ";
-    cout << cache.get(s);
-    cout << endl;
+  while (true) {
+    cout << ">>> ";
+
+    string s = "";
+    cin >> s;
+
+    if (s == "HELP") {
+      cout << "  SIZE" << endl;
+      cout << "  PRINT" << endl;
+      cout << "  CLEAR" << endl;
+      cout << "  FETCH_ALL" << endl;
+      cout << "  FLUSH_ALL" << endl;
+      cout << "  CONTAINS <string>" << endl;
+      cout << "  FETCH <string>" << endl;
+      cout << "  FLUSH <string>" << endl;
+      cout << "  GET <string>" << endl;
+      cout << "  PUT <string> <int>" << endl;
+      cout << "  QUIT" << endl;
+      continue;
+    }
+    if (s == "SIZE") {
+      cout << "  " << cache.size() << endl;
+      continue;
+    }
+    if (s == "PRINT") {
+      size_t i = 0;
+      for (const auto& line : cache) {
+        cout << "  " << (++i) << ": \"" << line.key << "\" -> \"" << line.val << "\"" << endl;
+      }
+      continue;
+    }
+    if (s == "CLEAR") {
+      cache.clear();
+      cout << "  OK" << endl;
+      continue;
+    }
+    if (s == "FETCH_ALL") {
+      cache.fetch();
+      cout << "  OK" << endl;
+      continue;
+    }
+    if (s == "FLUSH_ALL") {
+      cache.flush();
+      cout << "  OK" << endl;
+      continue;
+    }
+    if (s == "CONTAINS") {
+      string k = "";
+      cin >> k;
+      cout << "  " << (cache.contains(k) ? "YES" : "NO") << endl;
+      continue;
+    }
+    if (s == "FETCH") {
+      string k = "";
+      cin >> k;
+      cache.fetch(k);
+      cout << "  OK" << endl;
+      continue;
+    }
+    if (s == "FLUSH") {
+      string k = "";
+      cin >> k;
+      cache.flush(k);
+      cout << "  OK" << endl;
+      continue;
+    }
+    if (s == "GET") {
+      string k = "";
+      cin >> k;
+      cout << "  \"" << k << "\" -> \"" << cache.get(k) << endl;
+      continue;
+    }
+    if (s == "PUT") {
+      string k = "";
+      int v = 0;
+      cin >> k >> v;
+      cache.put(k, v);
+      cout << "  OK" << endl;
+      continue;
+    }
+    if (cin.eof() || s == "QUIT") {
+      if (cin.eof()) {
+        cout << endl;
+      }
+      cout << "  OK" << endl;
+      break;
+    }
+    cout << "  UNRECOGNIZED COMMAND" << endl;
   }
 
   return 0;

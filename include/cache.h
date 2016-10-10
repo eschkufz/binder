@@ -18,15 +18,23 @@ class Cache {
 
   public:
     struct line_type {
-      CKey key_type;
-      CVal val_type;
+      CKey key;
+      CVal val;
     };
 
     class const_iterator : public std::iterator<std::forward_iterator_tag, line_type> {
-      private:
-        const_iterator(typename std::unordered_map<CKey, meta_type>::const_iterator itr) : itr_(itr) { }
-
       public:
+        const_iterator() : itr_() { }
+        const_iterator(typename std::unordered_map<CKey, meta_type>::const_iterator itr) : itr_(itr) { }
+        const_iterator(const_iterator& rhs) : itr_(rhs.itr_) { }
+        const_iterator(const_iterator&& rhs) : const_iterator() {
+          swap(*this, rhs);
+        }
+        const_iterator& operator=(const_iterator rhs) {
+          swap(*this, rhs);
+          return *this;
+        }
+
         const_iterator& operator++() {
           itr_++;
           return *this;
@@ -52,6 +60,10 @@ class Cache {
           return nullptr;
         }
       
+        friend void swap(const_iterator& lhs, const_iterator& rhs) {
+          using std::swap;
+          swap(lhs.itr_, rhs.itr_);
+        }
       private: 
         typename std::unordered_map<CKey, meta_type>::const_iterator itr_;
     };
@@ -137,8 +149,8 @@ class Cache {
       auto itr = contents_.find(ck);
       if (itr == contents_.end()) {
         auto cv = vinit(k, ck);
-        db_get(ck, cv);
-        itr = contents_.insert({ck, {cv,false}}).first;
+        const auto res = db_get(ck, cv);
+        itr = contents_.insert({ck, {cv,!res}}).first;
         evict();
       }
 
