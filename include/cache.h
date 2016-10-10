@@ -134,7 +134,7 @@ class Cache {
     }
     virtual void fetch(const Key& k) {
       const auto ck = kmap(k);
-      auto cv = vinit(k, ck);
+      auto cv = vinit();
       if (db_get(ck, cv)) {
         contents_[ck] = {cv,false};
         evict();
@@ -152,9 +152,12 @@ class Cache {
       const auto ck = kmap(k);
       auto itr = contents_.find(ck);
       if (itr == contents_.end()) {
-        auto cv = vinit(k, ck);
-        const auto res = db_get(ck, cv);
-        itr = contents_.insert({ck, {cv,!res}}).first;
+        auto cv = vinit();
+        if (db_get(ck, cv)) {
+          itr = contents_.insert({ck, {cv, false}}).first;
+        } else {
+          itr = contents_.insert({ck, {vinit(k, ck), true}}).first;
+        }
         evict();
       }
 
@@ -166,15 +169,14 @@ class Cache {
       const auto cv = vmap(v);
       auto itr = contents_.find(ck);
       if (itr == contents_.end()) {
-        const auto i = vinit(k, ck);
-        itr = contents_.insert({ck, {i,false}}).first;
+        itr = contents_.insert({ck, {vinit(), true}}).first;
         evict();
       }
       merge(cv, itr->second.cval);
       if (wt_) {
         db_set(ck, itr->second.cval);
+        itr->second.is_dirty = false;
       } 
-      itr->second.is_dirty = !wt_;
     }
 
     friend void swap(Cache& lhs, Cache& rhs) {
@@ -185,15 +187,15 @@ class Cache {
     }
 
   protected:
-    // The default key
+    // Returns an object of type CKey. No restrictions.
     virtual CKey kinit() {
       return CKey();
     }
-    // The default val
+    // Returns an object of type CVal which guarantees that merge(v, vinit()) == v
     virtual CVal vinit() {
       return CVal();
     }
-    // The default val to associate with a key
+    // The object that should be returned when get(k) fails to find a match
     virtual CVal vinit(const Key& k, const CKey& ck) {
       (void) k;
       (void) ck;
