@@ -85,6 +85,10 @@ class Cache {
       return *this;
     }
 
+    Database& get_database() const {
+      return *db_;
+    }
+
     size_t size() const {
       return contents_.size();
     }
