@@ -130,7 +130,7 @@ class Cache {
 
     virtual bool contains(const Key& k) {
       const auto ck = kmap(k);
-      return contents_.find(ck) != contents_.end() ? true : db_contains(ck);
+      return contents_.find(ck) != contents_.end();
     }
     virtual void fetch(const Key& k) {
       const auto ck = kmap(k);
@@ -243,11 +243,6 @@ class Cache {
     std::unordered_map<CKey, meta_type> contents_;
     bool wt_;
 
-    bool db_contains(const CKey& ck) {
-      std::stringstream ks;
-      kwrite(ks, ck);
-      return db_->contains({ks.str().c_str(), ks.str().length()});
-    }
     bool db_get(const CKey& ck, CVal& cv) {
       std::stringstream ks;
       kwrite(ks, ck);
