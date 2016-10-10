@@ -1,6 +1,4 @@
-#include <cassert>
 #include <iostream>
-
 #include "include/binder.h"
 
 using namespace binder;
@@ -8,13 +6,11 @@ using namespace std;
 
 int main() {
   Database db;
-  
   db.connect("localhost", 6379);
   if (!db.is_connected()) {
-    cout << "Unable to connect to database at localhost:6379" << endl;
+    cerr << "Unable to connect to database at localhost:6379" << endl;
     exit(1);
   }
-  cout << "Connected to database at localhost:6379" << endl;
 
   while (true) {
     cout << ">>> ";
@@ -77,11 +73,10 @@ int main() {
         cout << endl;
       }
       cout << "  OK" << endl;
-      return 0;
+      break;
     }
     cout << "  UNRECOGNIZED COMMAND" << endl;
   }
 
-  assert(false);
-  return 1;
+  return 0;
 }

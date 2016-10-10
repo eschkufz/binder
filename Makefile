@@ -19,6 +19,7 @@ TEST_OBJ=\
 
 ### Example binaries
 BIN=\
+	bin/cache\
 	bin/database
 
 ### Top-level commands

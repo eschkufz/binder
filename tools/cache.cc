@@ -8,6 +8,7 @@ using namespace std;
 
 class MyCache : public Cache<string, int, string, int> {
   public:
+    MyCache(Database* db) : Cache(db) { }
     virtual ~MyCache() {}
 
   protected:
@@ -24,32 +25,18 @@ class MyCache : public Cache<string, int, string, int> {
     }
 };
 
-int main(int argc, char** argv) {
-  (void) argc;
-
-  MyCache cache;
-
-  cache.connect(argv[1], atoi(argv[2]));
-  if (!cache.is_connected()) {
-    cout << "Unable to connect to database at " << argv[1] << ":" << argv[2] << endl;
+int main() {
+  Database db;
+  db.connect("localhost", 6379);
+  if (!db.is_connected()) {
+    cerr << "Unable to connect to database at localhost:6379" << endl;
     exit(1);
   }
-  cout << "Connected to database at " << argv[1] << ":" << argv[2] << endl;
-
-  cache.fetch();
-  cout << "Loaded " << cache.size() << " elements from database:" << endl;
-  for (const auto& line : cache) {
-    cout << line.first << " -> " << line.second << endl;
-  }
+  MyCache cache(&db);
+  cache.write_through();
 
   string s = "";
   while (cin >> s) {
-    if (s == "FLUSH") {
-      cache.flush();
-      cout << "Flushed cache" << endl;
-      continue;
-    }
-
     cout << (cache.contains(s) ? "[   ] " : "[new] ");
     cout << "\"" << s << "\" ";
     cout << cache.get(s);

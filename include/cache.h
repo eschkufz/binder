@@ -1,14 +1,62 @@
 #ifndef BINDER_INCLUDE_CACHE_H
 #define BINDER_INCLUDE_CACHE_H
 
+#include <cassert>
 #include <sstream>
 #include <unordered_map>
-
 #include "include/database.h"
+
+namespace binder {
 
 template <typename Key, typename Val, typename CKey, typename CVal>
 class Cache {
+  private:
+    struct meta_type {
+      CVal cval;
+      bool is_dirty;
+    };
+
   public:
+    struct line_type {
+      CKey key_type;
+      CVal val_type;
+    };
+
+    class const_iterator : public std::iterator<std::forward_iterator_tag, line_type> {
+      private:
+        const_iterator(typename std::unordered_map<CKey, meta_type>::const_iterator itr) : itr_(itr) { }
+
+      public:
+        const_iterator& operator++() {
+          itr_++;
+          return *this;
+        }
+        const_iterator operator++(int) {
+          const auto ret = *this;
+          ++(*this);
+          return ret;
+        }
+
+        bool operator==(const const_iterator& rhs) const {
+          return itr_ == rhs.itr_;
+        }
+        bool operator!=(const const_iterator& rhs) const {
+          return !(*this == rhs);
+        }
+
+        line_type operator*() const {
+          return {itr_->first, itr_->second.cval};
+        }
+        line_type* operator->() const {
+          assert(false);
+          return nullptr;
+        }
+      
+      private: 
+        typename std::unordered_map<CKey, meta_type>::const_iterator itr_;
+    };
+    
+
     Cache(Database* db) : db_(db), wt_(false) { }
     Cache(const Cache& rhs) : db_(rhs.db_), contents_(rhs.contents_), wt_(rhs.wt_) { }
     Cache(Cache&& rhs) : Cache() {
@@ -18,13 +66,9 @@ class Cache {
       swap(*this, rhs);
       return *this;
     }
-    virtual ~Cache() { 
-      if (db_->is_connected()) {
-        flush();
-      }
-    }
+    virtual ~Cache() { }
 
-    Cache& write_through(bool wt) {
+    Cache& write_through(bool wt = true) {
       wt_ = wt;
       return *this;
     }
@@ -32,50 +76,69 @@ class Cache {
     size_t size() const {
       return contents_.size();
     }
-    // ...
+    const_iterator begin() const {
+      return const_iterator(contents_.begin());
+    }
+    const_iterator end() const {
+      return const_iterator(contents_.end());
+    }
 
     void clear() {
       contents_.clear();
     }
     void fetch() {
-      // ...
+      auto ck = kinit();
+      for (const auto& line : *db_) {
+        std::stringstream ks({line.key.str, line.key.len});
+        kread(ks, ck);
+
+        const auto itr = contents_.find(ck);
+        if (itr == contents_.end() || !itr->second.is_dirty) {
+          auto cv = vinit();
+          std::stringstream vs({line.val.str, line.val.len});
+          vread(vs, cv);
+
+          contents_.insert({ck, {cv,false}});
+          evict();
+        }
+      }
     }
     void flush() {
       for (auto& line : contents_) {
-        if (line.second.dirty) {
+        if (line.second.is_dirty) {
           db_set(line.first, line.second.cval);
-          line.second.dirty = false;
+          line.second.is_dirty = false;
         }
       }
     }
 
     virtual bool contains(const Key& k) {
       const auto ck = kmap(k);
-      return cache_.find(ck) != cache_.end() ? true : db_contains(ck);
+      return contents_.find(ck) != contents_.end() ? true : db_contains(ck);
     }
     virtual void fetch(const Key& k) {
       const auto ck = kmap(k);
       auto cv = vinit(k, ck);
       if (db_get(ck, cv)) {
-        cache_[ck] = {cv,false};
+        contents_[ck] = {cv,false};
         evict();
       }
     }
     virtual void flush(const Key& k) {
       const auto ck = kmap(k);
-      const auto itr = cache_.find(ck);
-      if (itr != cache_.end() && itr->second.dirty) {
+      const auto itr = contents_.find(ck);
+      if (itr != contents_.end() && itr->second.is_dirty) {
         db_set(ck, itr->second.cval);
-        itr->second.dirty = false;
+        itr->second.is_dirty = false;
       }
     }
     virtual Val get(const Key& k) {
       const auto ck = kmap(k);
-      auto itr = cache_.find(ck);
-      if (itr == cache_.end()) {
+      auto itr = contents_.find(ck);
+      if (itr == contents_.end()) {
         auto cv = vinit(k, ck);
         db_get(ck, cv);
-        itr = cache_.insert({ck, {cv,false}}).first;
+        itr = contents_.insert({ck, {cv,false}}).first;
         evict();
       }
 
@@ -85,17 +148,17 @@ class Cache {
     virtual void put(const Key& k, const Val& v) {
       const auto ck = kmap(k);
       const auto cv = vmap(v);
-      auto itr = cache_.find(ck);
-      if (itr == cache_.end()) {
+      auto itr = contents_.find(ck);
+      if (itr == contents_.end()) {
         const auto i = vinit(k, ck);
-        itr = cache_.insert({ck, {i,false}}).first;
+        itr = contents_.insert({ck, {i,false}}).first;
         evict();
       }
       merge(cv, itr->second.cval);
       if (wt_) {
         db_set(ck, itr->second.cval);
       } 
-      itr->second.dirty = !wt_;
+      itr->second.is_dirty = !wt_;
     }
 
     friend void swap(Cache& lhs, Cache& rhs) {
@@ -118,16 +181,22 @@ class Cache {
     virtual CVal vinit(const Key& k, const CKey& ck) {
       (void) k;
       (void) ck;
-      return CVal();
+      return vinit();
     }
 
     // Map a user key to a cache key
-    virtual CKey kmap(const Key& k) = 0;
+    virtual CKey kmap(const Key& k) {
+      return kinit();
+    }
     // Map a user val to a cache val
-    virtual CVal vmap(const Val& v) = 0;
-    
+    virtual CVal vmap(const Val& v) {
+      return vinit();
+    }
     // Merge a cache val with a pre-existing val
-    virtual void merge(const CVal& v1, CVal& v2) = 0;
+    virtual void merge(const CVal& v1, CVal& v2) {
+      (void) v1;
+      (void) v2;
+    }
     // Invert the results of a cache lookup
     virtual Val vunmap(const Key& k, const CKey& ck, const CVal& cv) {
       (void) k;
@@ -155,7 +224,7 @@ class Cache {
 
   private:
     Database* db_;
-    std::unordered_map<CKey, val_type> contents_;
+    std::unordered_map<CKey, meta_type> contents_;
     bool wt_;
 
     bool db_contains(const CKey& ck) {
@@ -183,5 +252,7 @@ class Cache {
       // TODO: Need to do something sensible here
     }
 };
+
+} // namespace binder
 
 #endif
