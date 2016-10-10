@@ -9,18 +9,18 @@ using namespace std;
 class MyCache : public Cache<string, int, string, int> {
   public:
     MyCache(Database* db) : Cache(db) { }
-    virtual ~MyCache() {}
+    ~MyCache() override {}
 
   protected:
-    virtual string kmap(const string& k) {
+    string kmap(const string& k) override {
       auto ret = k;
       transform(ret.begin(), ret.end(), ret.begin(), ::tolower);
       return ret;
     }
-    virtual int vmap(const int& v) {
+    int vmap(const int& v) override {
       return v;
     }
-    virtual void merge(const int& v1, int& v2) {
+    void merge(const int& v1, int& v2) override {
       v2 += v1;
     }
 };

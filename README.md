@@ -6,6 +6,9 @@ Dependencies:
 $ sudo apt-get install redis-server libhiredis-dev
 ```
 
+Deprecated
+---
+
 There are 3 layers of abstraction here:
 1. Key/Val       These are the types that are exposed to the user
 2. CKey/CVal     These are the types that are used by the cache
