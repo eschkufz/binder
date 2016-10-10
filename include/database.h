@@ -140,9 +140,7 @@ class Database {
     }
 
     Database& connect(const std::string& host, int port) {
-      if (is_connected()) {
-        disconnect();
-      }
+      disconnect();
 
       host_ = host;
       port_ = port;
@@ -167,6 +165,7 @@ class Database {
 
     size_t size() {
       assert(is_connected());
+      assert(rep_ != nullptr);
       freeReplyObject(rep_);
       rep_ = (redisReply*)redisCommand(rc_, "DBSIZE");
       return rep_->integer;
@@ -180,17 +179,23 @@ class Database {
 
     void clear() {
       assert(is_connected());
+      assert(rep_ != nullptr);
+
       freeReplyObject(rep_);
       rep_ = (redisReply*)redisCommand(rc_, "FLUSHDB");
     }
     bool contains(key_type k) {
       assert(is_connected());
+      assert(rep_ != nullptr);
+
       freeReplyObject(rep_);
       rep_ = (redisReply*)redisCommand(rc_, "EXISTS %b", k.str, k.len);  
       return rep_->integer == 1;
     }
     std::pair<val_type, bool> get(key_type k) {
       assert(is_connected());
+      assert(rep_ != nullptr);
+
       freeReplyObject(rep_);
       rep_ = (redisReply*)redisCommand(rc_, "GET %b", k.str, k.len);
       val_type v = {rep_->str, (size_t)rep_->len};
@@ -198,6 +203,8 @@ class Database {
     }
     void put(key_type k, val_type v) {
       assert(is_connected());
+      assert(rep_ != nullptr);
+
       freeReplyObject(rep_);
       rep_ = (redisReply*)redisCommand(rc_, "SET %b %b", k.str, k.len, v.str, v.len);
     }
