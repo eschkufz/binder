@@ -1,18 +1,11 @@
-all:
-	g++ -std=c++11 -Werror -Wextra -Wall -pedantic -I. tools/database.cc -o bin/database -lhiredis
-	g++ -std=c++11 -Werror -Wextra -Wall -pedantic -I. tools/example.cc -o bin/example -lhiredis
-
-clean:
-	rm -f bin/example bin/database
-
-
 ### Constants: g++
-INC=-Iinclude 
 CXX=g++ -std=c++11
 CXX_OPT=-Werror -Wextra -Wall -Wfatal-errors -pedantic 
+INC=-I.
+LIB=-lhiredis
 
 ### Constants: gtest
-GTEST_ROOT_DIR=ext/googletest/googletest/
+GTEST_ROOT_DIR=ext/googletest/googletest
 GTEST_BUILD_DIR=${GTEST_ROOT_DIR}/build
 GTEST_INC_DIR=${GTEST_ROOT_DIR}/include
 GTEST_MAIN=${GTEST_BUILD_DIR}/libgtest_main.a
@@ -24,21 +17,27 @@ GTEST_TARGET=bin/gtest
 TEST_OBJ=\
 	test/database.o
 
+### Example binaries
+BIN=\
+	bin/database
+
 ### Top-level commands
-all: ${GTEST_TARGET}
+all: ${BIN}
 check: ${GTEST_TARGET}
 	${GTEST_TARGET}
+clean:
+	rm -rf ${GTEST_BUILD_DIR} ${GTEST_TARGET} ${TEST_OBJ} ${BIN}
+
+### Build rules
 submodule:
 	git submodule init
 	git submodule update
-clean:
-	rm -rf ${GTEST_BUILD_DIR} ${GTEST_TARGET} ${TEST_OBJ}
-
-### Build rules
+bin/%: tools/%.cc include/*.h
+	${CXX} ${CXX_FLAGS} ${INC} $< -o $@ ${LIB}
 %.o: %.cc include/*.h
 	${CXX} ${CXX_FLAGS} ${GTEST_INC} ${INC} -c $< -o $@
-${GTEST_LIB}:
+${GTEST_LIB}: submodule
 	mkdir -p ${GTEST_BUILD_DIR}
 	cd ${GTEST_BUILD_DIR} && cmake .. && make
 ${GTEST_TARGET}: ${GTEST_LIB} ${GTEST_MAIN} ${TEST_OBJ}
-	${CXX} ${CXX_OPT} -o $@ ${TEST_OBJ} ${GTEST_LIB} ${GTEST_MAIN} -lpthread
+	${CXX} ${CXX_OPT} -o $@ ${TEST_OBJ} ${GTEST_LIB} ${GTEST_MAIN} ${LIB} -lpthread

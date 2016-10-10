@@ -6,6 +6,8 @@
 #include <hiredis/hiredis.h>
 #include <string>
 
+namespace binder {
+
 class Database {
   public:
     struct key_type {
@@ -214,5 +216,7 @@ class Database {
     redisContext* rc_;
     redisReply* rep_;
 };
+
+} // namespace binder
 
 #endif
