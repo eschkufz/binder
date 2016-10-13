@@ -104,8 +104,7 @@ class Cache {
         std::stringstream ks({line.key.str, line.key.len});
         kread(ks, ck);
 
-        const auto itr = contents_.find(ck);
-        if (itr == contents_.end() || !itr->second.is_dirty) {
+        if (contents_.find(ck) == contents_.end()) {
           auto cv = vinit();
           std::stringstream vs({line.val.str, line.val.len});
           vread(vs, cv);
@@ -130,10 +129,12 @@ class Cache {
     }
     virtual void fetch(const Key& k) {
       const auto ck = kmap(k);
-      auto cv = vinit();
-      if (db_get(ck, cv)) {
-        contents_[ck] = {cv,false};
-        evict();
+      if (contents_.find(ck) == contents_.end()) {
+        auto cv = vinit();
+        if (db_get(ck, cv)) {
+          contents_[ck] = {cv,false};
+          evict();
+        }
       }
     }
     virtual void flush(const Key& k) {
