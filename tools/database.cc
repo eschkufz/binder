@@ -35,8 +35,8 @@ int main() {
     if (s == "PRINT") {
       size_t i = 0;
       for (const auto& line : db) {
-        const string key(line.key.str, line.key.len);
-        const string val(line.val.str, line.val.len);
+        const string key(line.first.str, line.first.len);
+        const string val(line.second.str, line.second.len);
 
         cout << "  " << (++i) << ": \"" << key << "\" -> \"" << val << "\"" << endl;
       }

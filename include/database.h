@@ -4,24 +4,17 @@
 #include <cassert>
 #include <cstring>
 #include <hiredis/hiredis.h>
-#include <string>
 
 namespace binder {
 
 class Database {
   public:
-    struct key_type {
+    struct str_type {
       const char* str;
       size_t len;
     };
-    struct val_type {
-      const char* str;
-      size_t len;
-    };
-    struct line_type {
-      key_type key;
-      val_type val;
-    };
+    typedef std::pair<str_type, str_type> line_type;
+
     class const_iterator : public std::iterator<std::forward_iterator_tag, line_type> {
       friend class Database;
 
@@ -73,7 +66,7 @@ class Database {
         line_type operator*() const {
           assert(scan_ != nullptr);
           const auto ptr = scan_->element[1]->element[idx_];
-          const key_type key = {ptr->str, (size_t)ptr->len};
+          const str_type key = {ptr->str, (size_t)ptr->len};
           const auto res = db_->get(key);
 
           assert(res.second);
@@ -139,12 +132,12 @@ class Database {
       disconnect();
     }
 
-    Database& connect(const std::string& host, int port) {
+    Database& connect(const char* host, int port) {
       disconnect();
 
       host_ = host;
       port_ = port;
-      rc_ = redisConnectWithTimeout(host_.c_str(), port_, {1,500000});
+      rc_ = redisConnectWithTimeout(host_, port_, {1,500000});
       if (is_connected()) {
         rep_ = (redisReply*)redisCommand(rc_, "PING");
       }
@@ -166,6 +159,7 @@ class Database {
     size_t size() {
       assert(is_connected());
       assert(rep_ != nullptr);
+
       freeReplyObject(rep_);
       rep_ = (redisReply*)redisCommand(rc_, "DBSIZE");
       return rep_->integer;
@@ -184,7 +178,7 @@ class Database {
       freeReplyObject(rep_);
       rep_ = (redisReply*)redisCommand(rc_, "FLUSHDB");
     }
-    bool contains(key_type k) {
+    bool contains(str_type k) {
       assert(is_connected());
       assert(rep_ != nullptr);
 
@@ -192,16 +186,16 @@ class Database {
       rep_ = (redisReply*)redisCommand(rc_, "EXISTS %b", k.str, k.len);  
       return rep_->integer == 1;
     }
-    std::pair<val_type, bool> get(key_type k) {
+    std::pair<str_type, bool> get(str_type k) {
       assert(is_connected());
       assert(rep_ != nullptr);
 
       freeReplyObject(rep_);
       rep_ = (redisReply*)redisCommand(rc_, "GET %b", k.str, k.len);
-      val_type v = {rep_->str, (size_t)rep_->len};
+      str_type v = {rep_->str, (size_t)rep_->len};
       return {v, strncmp(rep_->str, "(nil)", rep_->len)};
     }
-    void put(key_type k, val_type v) {
+    void put(str_type k, str_type v) {
       assert(is_connected());
       assert(rep_ != nullptr);
 
@@ -218,7 +212,7 @@ class Database {
     }
 
   private:        
-    std::string host_;
+    const char* host_;
     int port_;
     redisContext* rc_;
     redisReply* rep_;

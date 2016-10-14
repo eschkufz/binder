@@ -15,7 +15,6 @@ GTEST_TARGET=bin/gtest
 
 ### Test binaries
 TEST_OBJ=\
-	test/cache.o\
 	test/database.o
 
 ### Example binaries

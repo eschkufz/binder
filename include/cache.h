@@ -1,266 +1,122 @@
 #ifndef BINDER_INCLUDE_CACHE_H
 #define BINDER_INCLUDE_CACHE_H
 
-#include <cassert>
-#include <sstream>
-#include <unordered_map>
 #include "include/database.h"
 
 namespace binder {
 
-template <typename Key, typename Val, typename CKey, typename CVal>
+template <typename T, typename W, typename F, typename E, typename S>
 class Cache {
-  private:
-    struct meta_type {
-      CVal cval;
-      bool is_dirty;
-    };
-
   public:
-    struct line_type {
-      CKey key;
-      CVal val;
-    };
+    typedef typename S::const_iterator const_iterator;
 
-    class const_iterator : public std::iterator<std::forward_iterator_tag, line_type> {
-      public:
-        const_iterator() : itr_() { }
-        const_iterator(typename std::unordered_map<CKey, meta_type>::const_iterator itr) : itr_(itr) { }
-        const_iterator(const_iterator& rhs) : itr_(rhs.itr_) { }
-        const_iterator(const_iterator&& rhs) : const_iterator() {
-          swap(*this, rhs);
-        }
-        const_iterator& operator=(const_iterator rhs) {
-          swap(*this, rhs);
-          return *this;
-        }
-
-        const_iterator& operator++() {
-          itr_++;
-          return *this;
-        }
-        const_iterator operator++(int) {
-          const auto ret = *this;
-          ++(*this);
-          return ret;
-        }
-
-        bool operator==(const const_iterator& rhs) const {
-          return itr_ == rhs.itr_;
-        }
-        bool operator!=(const const_iterator& rhs) const {
-          return !(*this == rhs);
-        }
-
-        line_type operator*() const {
-          return {itr_->first, itr_->second.cval};
-        }
-        line_type* operator->() const {
-          assert(false);
-          return nullptr;
-        }
-      
-        friend void swap(const_iterator& lhs, const_iterator& rhs) {
-          using std::swap;
-          swap(lhs.itr_, rhs.itr_);
-        }
-      private: 
-        typename std::unordered_map<CKey, meta_type>::const_iterator itr_;
-    };
-    
-
-    Cache(Database* db) : db_(db), wt_(false) { }
-    Cache(const Cache& rhs) : db_(rhs.db_), contents_(rhs.contents_), wt_(rhs.wt_) { }
-    Cache(Cache&& rhs) : Cache() {
-      swap(*this, rhs);
-    }    
-    Cache& operator=(Cache rhs) {
-      swap(*this, rhs);
-      return *this;
-    }
-    virtual ~Cache() { }
-
-    Cache& write_through(bool wt = true) {
-      wt_ = wt;
-      return *this;
-    }
+    Cache(Database& db, size_t c = 8) : capacity_(c), db_(db), fp_(db), wp_(db) { }
 
     size_t size() const {
-      return contents_.size();
+      return s_.size();
     }
+    size_t capacity() const {
+      return capacity_;
+    }
+
     const_iterator begin() const {
-      return const_iterator(contents_.begin());
+      return s_.begin();
     }
     const_iterator end() const {
-      return const_iterator(contents_.end());
+      return s_.end();
     }
 
     void clear() {
-      contents_.clear();
+      s_.clear();
     }
-    void fetch() {
-      auto ck = kinit();
-      for (const auto& line : *db_) {
-        std::stringstream ks({line.key.str, line.key.len});
-        kread(ks, ck);
+    bool contains(const typename T::key_type& k) {
+      T::begin();
 
-        if (contents_.find(ck) == contents_.end()) {
-          auto cv = vinit();
-          std::stringstream vs({line.val.str, line.val.len});
-          vread(vs, cv);
+      const auto ck = T::kmap(k);
+      const auto res = s_.find(ck) != s_.end();
 
-          contents_.insert({ck, {cv,false}});
-          evict();
-        }
-      }
+      T::end();
+      return res;
     }
-    void flush() {
-      for (auto& line : contents_) {
-        if (line.second.is_dirty) {
-          db_set(line.first, line.second.cval);
-          line.second.is_dirty = false;
-        }
-      }
-    }
+    void fetch(const typename T::key_type& k) {
+      T::begin();
 
-    virtual bool contains(const Key& k) {
-      const auto ck = kmap(k);
-      return contents_.find(ck) != contents_.end();
+      const auto ck = T::kmap(k);
+      fetch_inner(ck);
+
+      T::end();
     }
-    virtual void fetch(const Key& k) {
-      const auto ck = kmap(k);
-      if (contents_.find(ck) == contents_.end()) {
-        auto cv = vinit();
-        if (db_get(ck, cv)) {
-          contents_[ck] = {cv,false};
-          evict();
-        }
+    void flush(const typename T::key_type& k) {
+      T::begin();
+
+      const auto ck = T::kmap(k);
+      const auto itr = s_.find(ck);
+      if (itr != s_.end()) {
+        wp_.sync(itr);
       }
+
+      T::end();
     }
-    virtual void flush(const Key& k) {
-      const auto ck = kmap(k);
-      const auto itr = contents_.find(ck);
-      if (itr != contents_.end() && itr->second.is_dirty) {
-        db_set(ck, itr->second.cval);
-        itr->second.is_dirty = false;
-      }
-    }
-    virtual Val get(const Key& k) {
-      const auto ck = kmap(k);
-      auto itr = contents_.find(ck);
-      if (itr == contents_.end()) {
-        auto cv = vinit();
-        if (db_get(ck, cv)) {
-          itr = contents_.insert({ck, {cv, false}}).first;
-        } else {
-          itr = contents_.insert({ck, {vinit(k, ck), !wt_}}).first;
-          if (wt_) {
-            db_set(ck, itr->second.cval);
-          }
-        }
-        evict();
-      }
-      return vunmap(k, ck, itr->second.cval);
-    }
-    virtual void put(const Key& k, const Val& v) {
-      const auto ck = kmap(k);
-      const auto cv = vmap(v);
-      auto itr = contents_.find(ck);
-      if (itr == contents_.end()) {
-        itr = contents_.insert({ck, {vinit(), true}}).first;
-        evict();
-      }
-      merge(cv, itr->second.cval);
-      if (wt_) {
-        db_set(ck, itr->second.cval);
-        itr->second.is_dirty = false;
+    typename T::val_type get(const typename T::key_type& k) {
+      T::begin();
+
+      const auto ck = T::kmap(k);
+      fetch_inner(ck);
+
+      const auto cv = T::vinit(k, ck);
+      const auto ins = s_.insert({ck, cv});
+      if (ins.second) {
+        wp_.write(ins.first);
+        ep_.touch(ins.first);
+        ensure_size();
       } 
-    }
+      const auto res = T::vunmap(k, ck, ins.first->second);
 
-    friend void swap(Cache& lhs, Cache& rhs) {
-      using std::swap;
-      swap(lhs.db_, rhs.db_);
-      swap(lhs.contents_, rhs.contents_);
-      swap(lhs.wt_, rhs.wt_);
+      T::end();
+      return res;
     }
+    void put(const typename T::key_type& k, const typename T::val_type& v) {
+      T::begin();
 
-  protected:
-    // Returns an object of type CKey. No restrictions.
-    virtual CKey kinit() {
-      return CKey();
-    }
-    // Returns an object of type CVal which guarantees that merge(v, vinit()) == v
-    virtual CVal vinit() {
-      return CVal();
-    }
-    // The object that should be returned when get(k) fails to find a match
-    virtual CVal vinit(const Key& k, const CKey& ck) {
-      (void) k;
-      (void) ck;
-      return vinit();
-    }
+      const auto ck = T::kmap(k);
+      auto itr = s_.find(ck);
+      if (itr == s_.end()) {
+        itr = s_.insert({ck, T::vinit()}).first;
+      }
+      const auto cv = T::vmap(v);
+      T::merge(cv, itr->second);
+      wp_.write(itr);
+      ep_.touch(itr);
+      ensure_size();
 
-    // Map a user key to a cache key
-    virtual CKey kmap(const Key& k) {
-      return kinit();
-    }
-    // Map a user val to a cache val
-    virtual CVal vmap(const Val& v) {
-      return vinit();
-    }
-    // Merge a cache val with a pre-existing val
-    virtual void merge(const CVal& v1, CVal& v2) {
-      (void) v1;
-      (void) v2;
-    }
-    // Invert the results of a cache lookup
-    virtual Val vunmap(const Key& k, const CKey& ck, const CVal& cv) {
-      (void) k;
-      (void) ck;
-      return cv;
-    }
-
-    // Serialize a cache key to a stream
-    virtual void kwrite(std::ostream& os, const CKey& ck) {
-      os << ck;
-    }
-    // Serialize a cache value to a stream
-    virtual void vwrite(std::ostream& os, const CVal& cv) {
-      os << cv;
-    } 
-    
-    // Deserialize a cache key from a stream
-    virtual void kread(std::istream& is, CKey& ck) {
-      is >> ck;
-    }
-    // Deserialize a cache val from a stream
-    virtual void vread(std::istream& is, CVal& cv) {
-      is >> cv;
+      T::end();
     }
 
   private:
-    Database* db_;
-    std::unordered_map<CKey, meta_type> contents_;
-    bool wt_;
+    Database& db_;
+    size_t capacity_;
+    S s_;
+    F fp_;
+    W wp_;
+    E ep_;
 
-    bool db_get(const CKey& ck, CVal& cv) {
-      std::stringstream ks;
-      kwrite(ks, ck);
-      const auto res = db_->get({ks.str().c_str(), ks.str().length()});
-      std::stringstream vs({res.first.str, res.first.len}); 
-      vread(vs, cv);
-      return res.second;
+    void fetch_inner(const typename T::ckey_type& ck) {
+      fp_.fetch(ck);
+      for (const auto& res : fp_) {
+        const auto ins = s_.insert(res);
+        ep_.touch(ins.first);
+        if (ins.second) {
+          wp_.write(ins.first);
+          ensure_size();
+        } 
+      }
     }
-    void db_set(const CKey& ck, const CVal& cv) {
-      std::stringstream ks;
-      kwrite(ks, ck);
-      std::stringstream vs;
-      vwrite(vs, cv);
-      db_->put({ks.str().c_str(), ks.str().length()}, {vs.str().c_str(), vs.str().length()});
-    }
-
-    void evict() {
-      // TODO: Need to do something sensible here
+    void ensure_size() {
+      if (size() > capacity()) {
+        const auto itr = ep_.evict();
+        wp_.sync(itr);
+        s_.erase(itr);
+      }
     }
 };
 

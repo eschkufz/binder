@@ -19,13 +19,13 @@ TEST(database, basic) {
   vector<Database::line_type> elems(db.begin(), db.end());
   EXPECT_EQ(elems.size(), 0);
 
-  Database::key_type K = {"A", 1};
-  Database::val_type v = {"1", 1};
+  Database::str_type K = {"A", 1};
+  Database::str_type v = {"1", 1};
 
   char str[1] = "";
   for (size_t i = 0; i < 26; ++i) {
     str[0] = (char)((int)'a' + i) ;
-    Database::key_type k = {(const char*)&str, 1};
+    Database::str_type k = {(const char*)&str, 1};
 
     db.put(k, v);
     EXPECT_EQ(db.size(), i+1);
@@ -42,8 +42,8 @@ TEST(database, basic) {
     
     set<char> keys;
     for (const auto& line : db) {
-      EXPECT_EQ(line.key.len, 1);
-      keys.insert(line.key.str[0]);
+      EXPECT_EQ(line.first.len, 1);
+      keys.insert(line.first.str[0]);
     }
     for (size_t j = 0; j < i; ++j) {
       const auto c = (char)((int)'a' + j);
