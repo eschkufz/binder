@@ -93,8 +93,8 @@ class Cache {
     }
 
   private:
-    Database& db_;
     size_t capacity_;
+    Database& db_;
     S s_;
     F fp_;
     W wp_;
