@@ -19,16 +19,12 @@ TEST_OBJ=\
 	test/redis.o\
 	test/store.o
 
-### Example binaries
-BIN=\
-	bin/example
-
 ### Top-level commands
-all: ${BIN}
+all: check
 check: ${GTEST_TARGET}
 	${GTEST_TARGET}
 clean:
-	rm -rf ${GTEST_BUILD_DIR} ${GTEST_TARGET} ${TEST_OBJ} ${BIN}
+	rm -rf ${GTEST_BUILD_DIR} ${GTEST_TARGET} ${TEST_OBJ} 
 
 ### Build rules
 submodule:
