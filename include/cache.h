@@ -5,20 +5,14 @@
 #include "include/read.h"
 #include "include/write.h"
 
-#include <utility>
-
 namespace binder {
 
 template <typename S1, typename S2,
-          size_t C = 16,
           typename E = Lru<S1>, 
-          typename R = Fetch<S1,S2>, 
-          typename W = WriteThrough<S1,S2>>
+          typename R = Fetch<S2>, 
+          typename W = WriteThrough<S2>>
 class Cache {
   public:
-    // TODO:
-    // Iterators are going to have to invoke touch when they're derefed... how wild is that?
-
     // TYPES:
     // Container:
     typedef typename S1::value_type value_type;
@@ -34,7 +28,12 @@ class Cache {
     
     // CONSTRUCT/COPY/DESTROY:
     // Container:
-    // (default)
+    Cache(S2* s2 = nullptr, size_t c = 16) : s1_(), s2_(s2), capacity_(c) { }
+    Cache(const Cache& rhs) = default;
+    Cache(Cache&& rhs) = default;
+    Cache& operator=(const Cache& rhs) = default;
+    Cache& operator=(Cache&& rhs) = default;
+    ~Cache() = default;
     
     // ITERATORS:
     // Container:
@@ -66,48 +65,55 @@ class Cache {
       return s1_.size();
     }
     size_type max_size() const {
-      return C;
+      return capacity_;
     }
 
     // MODIFIERS:
     // Container:
     void swap(Cache& rhs) {
+      using std::swap;
       swap(s1_, rhs.s1_);
       swap(s2_, rhs.s2_);
-      // TODO: Need to swap the policies as well
+      swap(capacity_, rhs.capacity_);
+      swap(e_, rhs.e_);
+      swap(r_, rhs.r_);
+      swap(w_, rhs.w_);
     }
 
     // STORE INTERFACE:
-    std::pair<iterator, bool> insert(const value_type& v) { 
-      auto res = s1_.insert(v);
-      dirty_insert(res.first);
-      return res;
+    // Common:
+    bool contains(const k_type& k) {
+      return s1_.contains(k);
     }
-    iterator erase(const_iterator position) { 
-      w_.flush(s1_, s2_, *position);
-      return s1_.erase(position); 
+    v_type get(const k_type& k) {
+      if (s1_.contains(k)) {
+        e_.touch(k);
+      } else if (s2_ != nullptr) {
+        r_.fetch(*s2_, k);
+        for (auto v = r_.begin(), ve = r_.end(); v != ve; ++v) {
+          put(*v);
+        }
+      }
+      return s1_.get(k);
+    }
+    void put(const value_type& v) {
+      s1_.put(v);
+      e_.touch(v.first);
+      w_.modify(*s2_, v);
+      resize(max_size());
+    }
+    void erase(const k_type& k) {
+      w_.flush(*s2_, k);
+      e_.untouch(k);
+      s1_.erase(k);
     }
     void clear() { 
-      while (size() > 0) {
-        erase(e_.evict(s1_));
-      }
+      resize(0);
     }
-    iterator find(const k_type& k) { 
-      auto itr1 = s1_.find(k);
-      if (itr1 != s1_.end()) {
-        return itr1;
-      }
-
-      auto itr2 = r_.find(s1_, s2_, k);
-      if (itr2 != s2_.end()) {
-        itr1 = r_.insert(s1_, s2_, k, *itr2).first;
-        clean_insert(itr1);
-      }
-      while ((itr2 = r_.next(s1_, s2_)) != s2_.end()) {
-        auto tmp = r_.insert(s1_, s2_, k, *itr2).first;
-        clean_insert(tmp);
-      }
-      return itr1;
+    // Cache:
+    void capacity(size_t c) {
+      capacity_ = c;
+      resize(max_size());
     }
 
     // COMPARISON:
@@ -116,7 +122,7 @@ class Cache {
       return lhs.s1_ == rhs.s1_;
     }
     friend bool operator!=(const Cache& lhs, const Cache& rhs) {
-      return lhs.s1_ != rhs.s1_;
+      return !(lhs == rhs);
     }
 
     // SPECIALIZED ALGORITHMS:
@@ -127,23 +133,15 @@ class Cache {
 
   private:
     S1 s1_;
-    S2 s2_;
+    S2* s2_;
+    size_t capacity_;
     E e_;
     R r_;
     W w_;
 
-    void clean_insert(typename S1::iterator itr) {
-      e_.touch(itr);
-      w_.unset_dirty(s1_, s2_, itr);
-      if (size() > max_size()) {
-        erase(e_.evict(s1_));
-      }
-    }
-    void dirty_insert(typename S1::iterator itr) {
-      e_.touch(itr);
-      w_.set_dirty(s1_, s2_, itr);
-      if (size() > max_size()) {
-        erase(e_.evict(s1_));
+    void resize(size_t s) {
+      while (size() > s) {
+        erase(e_.evict());
       }
     }
 };

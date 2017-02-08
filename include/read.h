@@ -1,19 +1,34 @@
 #ifndef BINDER_INCLUDE_READ_H
 #define BINDER_INCLUDE_READ_H
 
+#include <vector>
+
 namespace binder {
 
-template <typename S1, typename S2>
-struct Fetch {
-  typename S2::iterator find(S1& s1, S2& s2, const typename S1::k_type& k) {
-    return s2.find(k);
-  }
-  typename S2::iterator next(S1& s1, S2& s2) {
-    return s2.end();
-  }
-  std::pair<typename S1::iterator, bool> insert(S1& s1, S2& s2, const typename S1::k_type& k, const typename S2::value_type val) {
-    return s1.insert(val);
-  }
+template <typename S>
+class Fetch {
+  public:
+    typedef typename std::vector<typename S::value_type>::const_iterator const_iterator;
+
+    void fetch(S& s, const typename S::k_type& k) {
+      vs_.clear();
+      if (s.contains(k)) {
+        vs_.push_back(std::make_pair(k,s.get(k)));
+      }
+    }
+    const_iterator begin() {
+      return vs_.begin();
+    }
+    const_iterator end() {
+      return vs_.end();
+    }
+    friend void swap(Fetch& lhs, Fetch& rhs) {
+      using std::swap;
+      swap(lhs.vs_, rhs.vs_);
+    }
+
+  private:
+    std::vector<typename S::value_type> vs_;
 };
 
 } // namespace binder

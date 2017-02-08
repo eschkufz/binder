@@ -16,6 +16,7 @@ GTEST_TARGET=bin/gtest
 ### Test binaries
 TEST_OBJ=\
 	test/adapter.o\
+	test/cache.o\
 	test/redis.o\
 	test/store.o
 

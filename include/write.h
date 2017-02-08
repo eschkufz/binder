@@ -1,19 +1,43 @@
 #ifndef BINDER_INCLUDE_WRITE_H
 #define BINDER_INCLUDE_WRITE_H
 
+#include <map>
+
 namespace binder {
 
-template <typename S1, typename S2>
+template <typename S>
 struct WriteThrough {
-  void set_dirty(S1& s1, S2& s2, typename S1::iterator itr) {
-    flush(s1, s2, *itr); 
+  void modify(S& s, const typename S::value_type& v) {
+    s.put(v);
   }
-  void unset_dirty(S1& s1, S2& s2, typename S1::iterator itr) {
+  void flush(S& s, const typename S::k_type& k) {
     // Does nothing.
   }
-  void flush(S1& s1, S2& s2, const typename S1::value_type& v) {
-    s2.insert(v); 
+  friend void swap(WriteThrough& lhs, WriteThrough& rhs) {
+    // Does nothing.
   }
+};
+
+template <typename S>
+class WriteBack {
+  public:
+    void modify(S& s, const typename S::value_type& v) {
+      vs_.insert(v);
+    }
+    void flush(S& s, const typename S::k_type& k) {
+      auto itr = vs_.find(k);
+      if (itr != vs_.end()) {
+        s.put(*itr);
+        vs_.erase(itr);
+      }
+    }
+    friend void swap(WriteBack& lhs, WriteBack& rhs) {
+      using std::swap;
+      swap(lhs.vs_, rhs.vs_);
+    }
+
+  private:
+    std::map<typename S::k_type, typename S::value_type> vs_;
 };
 
 } // namespace binder

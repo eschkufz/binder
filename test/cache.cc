@@ -1,26 +1,27 @@
 #include "gtest/gtest.h"
-#include "include/store.h"
 #include "include/cache.h"
+#include "include/store.h"
 #include "test/interface_test.h"
 
 using namespace binder;
 
 // Basic policy tests
 TEST(cache, basic) {
-  typedef Store<char, int> S;
-  Cache<S,S,26> s;
-
-  basic_test(s);
+  Store<char, int> ci;
+  Cache<decltype(ci),decltype(ci)> s(&ci, 26);
+  basic(s);
 }
-TEST(cache, small) {
-  typedef Store<int, int> S;
-  Cache<S,S,1> s;
 
-  s.insert(make_pair(0,0));
+// Small cache
+TEST(cache, small) {
+  Store<int, int> ii;
+  Cache<decltype(ii),decltype(ii)> s(&ii, 1);
+
+  s.put(make_pair(0,0));
   for (size_t i = 0; i < 8; ++i) {
-    s.insert(make_pair(i+1, i+1));
+    s.put(make_pair(i+1, i+1));
     EXPECT_EQ(s.size(), 1);
-    EXPECT_EQ(s.find(i), s.end());
-    EXPECT_NE(s.find(i+1), s.end());
+    EXPECT_FALSE(s.contains(i));
+    EXPECT_TRUE(s.contains(i+1));
   }
 }

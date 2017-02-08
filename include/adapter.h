@@ -120,14 +120,12 @@ class AdapterStore {
     
     // CONSTRUCT/COPY/DESTROY:
     // Container:
-    AdapterStore() : s_(nullptr) { }
+    AdapterStore(S* s = nullptr) : s_(s) { }
     AdapterStore(const AdapterStore& rhs) = default;
     AdapterStore(AdapterStore&& rhs) = default;
     AdapterStore& operator=(const AdapterStore& rhs) = default;
     AdapterStore& operator=(AdapterStore&& rhs) = default;
     ~AdapterStore() = default;
-    // AdapterStore:
-    AdapterStore(S* s) : s_(s) { }
 
     // ITERATORS:
     // Container:
@@ -165,6 +163,7 @@ class AdapterStore {
     // MODIFIERS:
     // Container:
     void swap(AdapterStore& rhs) {
+      using std::swap;
       swap(s_, rhs.s_);
     }
 
