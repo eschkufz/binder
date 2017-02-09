@@ -37,7 +37,7 @@ class WriteBack {
     }
 
   private:
-    std::map<typename S::k_type, typename S::value_type> vs_;
+    std::map<typename S::k_type, typename S::v_type> vs_;
 };
 
 } // namespace binder

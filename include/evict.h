@@ -1,31 +1,42 @@
 #ifndef BINDER_INCLUDE_EVICT_H
 #define BINDER_INCLUDE_EVICT_H
 
-#include <set>
+#include <list>
+#include <map>
 
 namespace binder {
-
-// TODO: This isn't lru
 
 template <typename S>
 class Lru {
   public:
-    void untouch(const typename S::k_type& k) {
-      ks_.erase(k);
+    void erase(const typename S::k_type& k) {
+      auto itr = index_.find(k);
+      lru_.erase(itr->second);
+      index_.erase(itr);
     }
     void touch(const typename S::k_type& k) {
-      ks_.insert(k);
+      lru_.push_front(k);
+
+      auto itr = index_.find(k);
+      if (itr != index_.end()) {
+        lru_.erase(itr->second);
+        itr->second = lru_.begin();
+      } else {
+        index_.insert(itr, std::make_pair(k, lru_.begin()));
+      }
     }
     typename S::k_type evict() {
-      return *ks_.begin();
+      return lru_.back();
     }
     friend void swap(Lru& lhs, Lru& rhs) {
       using std::swap;
-      swap(lhs.ks_, rhs.ks_);
+      swap(lhs.lru_, rhs.lru_);
+      swap(lhs.index_, rhs.index_);
     }
 
   private:
-    std::set<typename S::k_type> ks_;
+    std::list<typename S::k_type> lru_;
+    std::map<typename S::k_type, typename std::list<typename S::k_type>::iterator> index_;
 };
 
 } // namespace binder 

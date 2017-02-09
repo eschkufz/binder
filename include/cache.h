@@ -104,7 +104,7 @@ class Cache {
     }
     void erase(const k_type& k) {
       w_.flush(*s2_, k);
-      e_.untouch(k);
+      e_.erase(k);
       s1_.erase(k);
     }
     void clear() { 
