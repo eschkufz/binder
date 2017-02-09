@@ -1,118 +1,57 @@
 # binder
-A fuzzy database 
+A c++-14 stl-compliant implementation of a key-value store.
 
-Dependencies:
+Dependencies
+---
 ```
 $ sudo apt-get install redis-server libhiredis-dev
 ```
 
-This documentation is incomplete
----
+fetch() is invoked whenever the key k is not found in s1. Should attempt to
+find k in s2, and insert it into s1. Returns an interator into s1 on success,
+or s1.end() on failure.
 
-There are 3 layers of abstraction here:
-1. Key/Val       These are the types that are exposed to the user
-2. CKey/CVal     These are the types that are used by the cache
-3. string/string These are the types used by the database
-
-```
-template <typename Types, 
-          typename WritePolicy, typename FetchPolicy, typename EvictPolicy,
-          typename Storage>
-class Cache {
-  public:
-    Cache(Database& db, size_t capacity);
-
-    size_t size() const;
-    size_t capacity() const;
-
-    const_iterator begin() const;
-    const_iterator end() const;
-
-    void clear();
-    bool contains(const Types::key_type& k);
-    void fetch(const Types::key_type& k);
-    void flush(const Types::key_type& k);
-    Types::val_type get(const Types::key_type& k);
-    void put(const Types::key_type& k, const Types::val_type& v);
+``` c++
+template <typename S1, typename S2>
+struct Fetch {
+  typename S1::iterator fetch(S1& s1, S2& s2, const typename S1::k_type& k);
 };
 ```
 
-```
-struct MyTypes {
-  // These typedefs must be provided
-  typedef ... key_type;
-  typedef ... val_type;
-  typedef ... ckey_type;
-  typedef ... cval_type;
+emplace() and insert() are invoked whenever a new key value pair is to be
+inserted into s1. flush() is invoked whenever the pair at itr is about to be
+evicted from s1 to write it to s2 if necessary.
 
-  // Returns a ckey_type. No restrictions.
-  static ckey_type kinit();
-  // Returns a cval_type which guarantees that merge(v, vinit()) == v
-  static cval_type vinit();
-  // The object that should be returned when get(k) fails to find a match
-  static cval_type vinit(const key_type& k, const ckey_type& ck);
-
-  // Map a key_type to a ckey_type
-  static ckey_type kmap(const key_type& k);
-  // Map a val_type to a cval_type
-  static cval_type vmap(const val_type& v);
-  // Merge a cval_type with a pre-existing cval_type
-  static void merge(const cval_type& v1, cval_type& v2);
-  // Invert the results of a lookup
-  static val_type vunmap(const key_type& k, const ckey_type& ck, const cval_type& cv);
-
-  // Stream I/O
-  static void kwrite(std::ostream& os, const ckey_type& k);
-  static void vwrite(std::ostream& os, const cval_type& v);
-  static void kread(std::istream& is, ckey_type& k);
-  static void vread(std::istream& is, cval_type& v);
-
-  // Transaction begin/end
-  static void begin();
-  static void end();
+``` c++
+template <typename S1, typename S2>
+struct Write {
+  template <typename... Args>
+  std::pair<typename S1::iterator, bool> emplace(S1& s1, S2& s2, Args&&... args);
+  std::pair<typename S1::iterator, bool> insert(S1& s1, S2& s2, const typename S1::value_type& v);
+  void flush(S2& s2, typename S1::const_iterator itr); 
 };
 ```
 
-```
-template <typename MyTypes, typename MyStorage>
-struct FetchPolicy {
-  // This typedef must be provided
-  typedef ... const_iterator
+touch() is invoked whenever <... when ...>. evict() is invoked whenever an item
+is to be removed from s1. 
 
-  // A reference to the database connection 
-  FetchPolicy(Database& db);
-
-  // Invoked whenever a fetch is requested
-  void fetch(const T::ckey_type& ck);
-
-  // Iterators over fetch results.
-  // If no results are returned, begin() == end() must hold.
-  // If more than one result is returned, begin() must correspond
-  // to the argument which was passed to fetch()
-  const_iterator begin() const;
-  const_iterator end() const;
+``` c++
+template <typename S1>
+struct Evict {
+  void touch(typename S1::iterator itr);
+  typename S1::const_iterator evict(S1& s1);
 };
 ```
 
-```
-template <typename MyTypes, typename MyStorage>
-struct WritePolicy {
-  // A reference to the database connection
-  WritePolicy(Database& db);
+Map kmap()/vmap()/vunmap() are used to convert between types when moving
+key-value pairs back and forth between primary store and backing store.
 
-  // Invoked whenever a cache entry is written
-  void write(typename MyStorage::const_iterator line);
-  // Invoked whenever the cache requests a sync
-  void sync(typename MyStorage::const_iterator line);
+``` c++
+template <typename DK, typename DV, 
+          typename RK, typename RV>
+struct Map {
+  RK kmap(const DK& dk);
+  RV vmap(const DV& dv);
+  DV vunmap(const DK& dk, const RK& rk, const RV& rv);
 };
-```
-
 ``` 
-template <typename MyTypes, typename MyStorage>
-struct EvictPolicy {
-  // Invoked whenever a cache entry is read or written
-  void touch(typename MyStorage::const_iterator line);
-  // Invoked whenever the cache requests an eviction
-  typename MyStorage::const_iterator evict();
-};
-```

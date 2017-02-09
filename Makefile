@@ -1,6 +1,6 @@
 ### Constants: g++
 CXX=g++ -std=c++11
-CXX_OPT=-Werror -Wextra -Wall -Wfatal-errors -pedantic 
+CXX_OPT=-Werror -Wextra -Wall -Wfatal-errors -pedantic -O3
 INC=-I.
 LIB=-lhiredis
 
@@ -15,19 +15,17 @@ GTEST_TARGET=bin/gtest
 
 ### Test binaries
 TEST_OBJ=\
-	test/database.o
-
-### Example binaries
-BIN=\
-	bin/cache\
-	bin/database
+	test/adapter.o\
+	test/cache.o\
+	test/redis.o\
+	test/store.o
 
 ### Top-level commands
-all: ${BIN}
+all: check
 check: ${GTEST_TARGET}
 	${GTEST_TARGET}
 clean:
-	rm -rf ${GTEST_BUILD_DIR} ${GTEST_TARGET} ${TEST_OBJ} ${BIN}
+	rm -rf ${GTEST_BUILD_DIR} ${GTEST_TARGET} ${TEST_OBJ} 
 
 ### Build rules
 submodule:
@@ -40,5 +38,5 @@ bin/%: tools/%.cc include/*.h
 ${GTEST_LIB}: submodule
 	mkdir -p ${GTEST_BUILD_DIR}
 	cd ${GTEST_BUILD_DIR} && cmake .. && make
-${GTEST_TARGET}: ${GTEST_LIB} ${GTEST_MAIN} ${TEST_OBJ}
+${GTEST_TARGET}: ${GTEST_LIB} ${GTEST_MAIN} ${TEST_OBJ} test/*.h
 	${CXX} ${CXX_OPT} -o $@ ${TEST_OBJ} ${GTEST_LIB} ${GTEST_MAIN} ${LIB} -lpthread

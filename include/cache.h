@@ -1,121 +1,147 @@
 #ifndef BINDER_INCLUDE_CACHE_H
 #define BINDER_INCLUDE_CACHE_H
 
-#include "include/database.h"
+#include "include/evict.h"
+#include "include/read.h"
+#include "include/write.h"
 
 namespace binder {
 
-template <typename T, typename W, typename F, typename E, typename S>
+template <typename S1, typename S2,
+          typename E = Lru<S1>, 
+          typename R = Fetch<S2>, 
+          typename W = WriteThrough<S2>>
 class Cache {
   public:
-    typedef typename S::const_iterator const_iterator;
-
-    Cache(Database& db, size_t c = 8) : capacity_(c), db_(db), fp_(db), wp_(db) { }
-
-    size_t size() const {
-      return s_.size();
+    // TYPES:
+    // Container:
+    typedef typename S1::value_type value_type;
+    typedef typename S1::reference reference;
+    typedef typename S1::const_reference const_reference;
+    typedef typename S1::iterator iterator;
+    typedef typename S1::const_iterator const_iterator;
+    typedef typename S1::difference_type difference_type;
+    typedef typename S1::size_type size_type;
+    // Other:
+    typedef typename S1::k_type k_type;
+    typedef typename S1::v_type v_type;
+    
+    // CONSTRUCT/COPY/DESTROY:
+    // Container:
+    Cache(S2* s2 = nullptr, size_t c = 16) : s1_(), s2_(s2), capacity_(c) { }
+    Cache(const Cache& rhs) = default;
+    Cache(Cache&& rhs) = default;
+    Cache& operator=(const Cache& rhs) = default;
+    Cache& operator=(Cache&& rhs) = default;
+    ~Cache() = default;
+    
+    // ITERATORS:
+    // Container:
+    iterator begin() { 
+      return s1_.begin();
     }
-    size_t capacity() const {
+    const_iterator begin() const {
+      return s1_.begin();
+    }
+    iterator end() {
+      return s1_.end();
+    }
+    const_iterator end() const {
+      return s1_.end();
+    }
+    const_iterator cbegin() const {
+      return s1_.cbegin();
+    }
+    const_iterator cend() const {
+      return s1_.cend();
+    }
+
+    // CAPACITY:
+    // Container:
+    bool empty() const {
+      return s1_.empty();
+    }
+    size_type size() const {
+      return s1_.size();
+    }
+    size_type max_size() const {
       return capacity_;
     }
 
-    const_iterator begin() const {
-      return s_.begin();
+    // MODIFIERS:
+    // Container:
+    void swap(Cache& rhs) {
+      using std::swap;
+      swap(s1_, rhs.s1_);
+      swap(s2_, rhs.s2_);
+      swap(capacity_, rhs.capacity_);
+      swap(e_, rhs.e_);
+      swap(r_, rhs.r_);
+      swap(w_, rhs.w_);
     }
-    const_iterator end() const {
-      return s_.end();
+
+    // STORE INTERFACE:
+    // Common:
+    bool contains(const k_type& k) {
+      return s1_.contains(k);
     }
-
-    void clear() {
-      s_.clear();
-    }
-    bool contains(const typename T::key_type& k) {
-      T::begin();
-
-      const auto ck = T::kmap(k);
-      const auto res = s_.find(ck) != s_.end();
-
-      T::end();
-      return res;
-    }
-    void fetch(const typename T::key_type& k) {
-      T::begin();
-
-      const auto ck = T::kmap(k);
-      fetch_inner(ck);
-
-      T::end();
-    }
-    void flush(const typename T::key_type& k) {
-      T::begin();
-
-      const auto ck = T::kmap(k);
-      const auto itr = s_.find(ck);
-      if (itr != s_.end()) {
-        wp_.sync(itr);
+    v_type get(const k_type& k) {
+      if (s1_.contains(k)) {
+        e_.touch(k);
+      } else if (s2_ != nullptr) {
+        r_.fetch(*s2_, k);
+        for (auto v = r_.begin(), ve = r_.end(); v != ve; ++v) {
+          put(*v);
+        }
       }
-
-      T::end();
+      return s1_.get(k);
     }
-    typename T::val_type get(const typename T::key_type& k) {
-      T::begin();
-
-      const auto ck = T::kmap(k);
-      fetch_inner(ck);
-
-      const auto cv = T::vinit(k, ck);
-      const auto ins = s_.insert({ck, cv});
-      if (ins.second) {
-        wp_.write(ins.first);
-        ep_.touch(ins.first);
-        ensure_size();
-      } 
-      const auto res = T::vunmap(k, ck, ins.first->second);
-
-      T::end();
-      return res;
+    void put(const value_type& v) {
+      s1_.put(v);
+      e_.touch(v.first);
+      w_.modify(*s2_, v);
+      resize(max_size());
     }
-    void put(const typename T::key_type& k, const typename T::val_type& v) {
-      T::begin();
+    void erase(const k_type& k) {
+      w_.flush(*s2_, k);
+      e_.erase(k);
+      s1_.erase(k);
+    }
+    void clear() { 
+      resize(0);
+    }
+    // Cache:
+    void capacity(size_t c) {
+      capacity_ = c;
+      resize(max_size());
+    }
 
-      const auto ck = T::kmap(k);
-      auto itr = s_.find(ck);
-      if (itr == s_.end()) {
-        itr = s_.insert({ck, T::vinit()}).first;
-      }
-      const auto cv = T::vmap(v);
-      T::merge(cv, itr->second);
-      wp_.write(itr);
-      ep_.touch(itr);
-      ensure_size();
+    // COMPARISON:
+    // Container:
+    friend bool operator==(const Cache& lhs, const Cache& rhs) {
+      return lhs.s1_ == rhs.s1_;
+    }
+    friend bool operator!=(const Cache& lhs, const Cache& rhs) {
+      return !(lhs == rhs);
+    }
 
-      T::end();
+    // SPECIALIZED ALGORITHMS:
+    // Container:
+    friend void swap(Cache& lhs, Cache& rhs) {
+      lhs.swap(rhs);
     }
 
   private:
+    S1 s1_;
+    S2* s2_;
     size_t capacity_;
-    Database& db_;
-    S s_;
-    F fp_;
-    W wp_;
-    E ep_;
+    E e_;
+    R r_;
+    W w_;
 
-    void fetch_inner(const typename T::ckey_type& ck) {
-      fp_.fetch(ck);
-      for (const auto& res : fp_) {
-        const auto ins = s_.insert(res);
-        ep_.touch(ins.first);
-        if (ins.second) {
-          wp_.write(ins.first);
-          ensure_size();
-        } 
-      }
-    }
-    void ensure_size() {
-      if (size() > capacity()) {
-        const auto itr = ep_.evict();
-        wp_.sync(itr);
-        s_.erase(itr);
+    void resize(size_t s) {
+      while (size() > s) {
+        erase(e_.evict());
       }
     }
 };
