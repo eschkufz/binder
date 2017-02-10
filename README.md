@@ -7,7 +7,9 @@ Dependencies
 $ sudo apt-get install redis-server libhiredis-dev
 ```
 
-```Store``` is a simple in-memory key-value store. In addition to satisfying the interface and typedef requirements of an stl container, ```Store``` provides typedefs for querying key/value types and methods for modifying its contents. It is implemented in terms of an stl ```map```.
+Documentation
+---
+```Store``` is a simple in-memory key-value store. In addition to satisfying the interface and typedef requirements of an stl container, ```Store``` provides typedefs for compile-time querying the ```Key``` and ```Value``` types, and runtime methods for modifying its contents. The semantics of these methods are suggested by their names. The only non-obvious behavior is that invoking ```get()``` for a non-existent key will return a default constructed ```Value```. ```Store``` is implemented in terms of an stl ```map```.
 
 ``` c++
 template <typename Key, typename Value>
@@ -45,15 +47,15 @@ class UnorderedStore {
 Because Redis key-value stores store data as text, ```RedisStore``` takes a third template argument ```IO``` which represents a function object for converting ```Key``` and ```Value``` objects back and forth to and from text. If no object is provided ```RedisStore``` defaults to using the convenience class ```Stream``` which is defined in terms of the ```iostream``` insertion and extraction operators.
 
 ```c++
-template <typename K, typename V>
+template <typename Key, typename Value>
 struct IO {
-  void kread(std::istream& is, K& k);
-  void vread(std::istream& is, V& v);
-  void kwrite(std::ostream& os, const K& k);
-  void vwrite(std::ostream& os, const V& v);
+  void kread(std::istream& is, Key& k);
+  void vread(std::istream& is, Value& v);
+  void kwrite(std::ostream& os, const Key& k);
+  void vwrite(std::ostream& os, const Value& v);
 };
 
-template <typename K, typename V, typename IO=Stream<K,V>>
+template <typename Key, typename Value, typename IO=Stream<Key,Value>>
 class RedisStore {
   public:
     // stl container typedefs...
@@ -68,17 +70,22 @@ class RedisStore {
 };
 ```
 
+In some cases, it may be useful to treat a store ```S``` for types ```RKey``` and ```RValue``` as though it were defined in terms of (potentially) different types ```DKey``` and ```DValue```. This functionality is provided by the class ```Adapter``` which is parameterized by a backing store ```S``` and a function object ```Map``` for converting back and forth between objects of type ```Dkey``` and ```RKey``` and objects of type ```DValue``` and ```RValue```. The ```Adapter``` class also provides a convenience constructor and a method for swapping out the backing store. 
+
+In addition to providing type abstraction, the ```Map``` class can also provide a simple form of value abstraction. Whereas iterator dereference will invoke the unary forms of ```kunmap()``` and ```vunmap()```, the ```get()``` method will invoke the ternary form which which is aware of both the ```DKey``` and ```RKey``` which correspond to the returned value. This allows the user to define mappings which represent invertible onto relationships. If no mapping object is provided, binder defaults to using the convenience class ```Cast``` which is defined in terms of C-style casts between types.
+
 ```c++
-template <typename DK, typename DV, typename RK, typename RV>
+template <typename DKey, typename DValue, typename RKey, typename RValue>
 struct Map {
-  RK kmap(const DK& dk);
-  RV vmap(const DV& dv);
-  DK kunmap(const RK& rk);
-  DV vunmap(const RV& rv);
-  DV vunmap(const DK& dk, const RK& rk, const RV& rv);
+  RKey kmap(const DKey& dk);
+  RValue vmap(const DValue& dv);
+  DKey kunmap(const RKey& rk);
+  DValue vunmap(const RValue& rv);
+  DValue vunmap(const DKey& dk, const RKey& rk, const RValue& rv);
 };
 
-template <typename K, typename V, typename S, typename M>
+template <typename Key, typename Value, typename S, 
+          typename Map=Cast<Key, Value, S::k_type, S::v_type>>
 class AdapterStore {
   public:
     // stl container typedefs...
@@ -91,29 +98,35 @@ class AdapterStore {
 };
 ```
 
+In some cases it may also be useful to use one store as a cache for another. This functionality is provided by the ```Cache``` class which is defined in terms of a primary store ```S1``` and a backing-store ```S2``` as well as function objects which represent policies for ```Evict```-ing data from ```S1```, ```Read```-ing data from ```S2``` into ```S1``` and ```Write```-ing data from ```S1```  into ```S2```. The ```Cache``` class also provides a convenience constructor and methods for modifying its capacity and swapping out its backing store. 
+
+The interface for the three policy objects is shown below. ```Evict::erase()``` is invoked whenever a key is removed from ```S1``` and ```Evict::touch()``` is invoked whenever a key is get or set in ```S1```. ```Evict::evict()``` is used to select a key from ```S1``` which should be written back to ```S2``` when ```S1``` is full. ```Read::fetch()``` is invoked whenever a key cannot be located in ```S1``` and guarantees that ```Read::begin()``` and ```Read::end()``` can be used to iterate over the data which should be moved into ```S1``` as a result. ```Write::modify()``` is invoked at the first possible moment when data is put into ```S1``` and might also need to be put into ```S2```, and ```Write::flush()``` is invoked at the last possible moment. All three policies also require an stl-style ```swap()``` method.
+
+binder provides a ```Lru``` evict policy, a ```Fetch``` read policy, and ```WriteBack``` and ```WriteThrough``` write policies.
+
 ```c++
-template <typename S>
+template <typename S1>
 struct Evict {
-  void erase(const typename S::k_type& k);
-  void touch(const typename S::k_type& k);
-  typename S::k_type evict();
+  void erase(const typename S1::k_type& k);
+  void touch(const typename S1::k_type& k);
+  typename S1::k_type evict();
   friend void swap(Evict& lhs, Evict& rhs);
 };
 
-template <typename S>
+template <typename S2>
 struct Read {
   typedef /*...*/ const_iterator;
 
-  void fetch(S& s, const typename S::k_type& k);
+  void fetch(S2& s, const typename S2::k_type& k);
   const_iterator begin();
   const_iterator end();
   friend void swap(Read& lhs, Read& rhs);
 };
 
-template <typename S>
+template <typename S2>
 struct Write {
-  void modify(S& s, const typename S::value_type& v);
-  void flush(S& s, const typename S::k_type& k);
+  void modify(S2& s, const typename S2::value_type& v);
+  void flush(S2& s, const typename S2::k_type& k);
   friend void swap(Write& lhs, Write& rhs);
 };
 
