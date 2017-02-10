@@ -1,5 +1,5 @@
 # binder
-A c++-14 stl-compliant implementation of a key-value store.
+C++-14 stl-compliant key-value store containers.
 
 Dependencies
 ---
@@ -7,51 +7,131 @@ Dependencies
 $ sudo apt-get install redis-server libhiredis-dev
 ```
 
-fetch() is invoked whenever the key k is not found in s1. Should attempt to
-find k in s2, and insert it into s1. Returns an interator into s1 on success,
-or s1.end() on failure.
+```Store``` is a simple in-memory key-value store. In addition to satisfying the interface and typedef requirements of an stl container, ```Store``` provides typedefs for querying key/value types and methods for modifying its contents. It is implemented in terms of an stl ```map```.
 
 ``` c++
-template <typename S1, typename S2>
-struct Fetch {
-  typename S1::iterator fetch(S1& s1, S2& s2, const typename S1::k_type& k);
+template <typename Key, typename Value>
+class Store {
+  public:
+    // stl container typedefs...
+    // stl container interface...
+  
+    // store typedefs
+    typedef const Key k_type;
+    typedef const Value v_type;
+    
+    // store interface
+    bool contains(const k_type& k);
+    v_type get(const k_type& k);
+    void put(const value_type& v);
+    void erase(const k_type& k);
+    void clear();
 };
 ```
 
-emplace() and insert() are invoked whenever a new key value pair is to be
-inserted into s1. flush() is invoked whenever the pair at itr is about to be
-evicted from s1 to write it to s2 if necessary.
-
+```UnorderedStore``` is defined equivalently, but is implemented in terms of an stl ```unordered_map```.
 ``` c++
-template <typename S1, typename S2>
-struct Write {
-  template <typename... Args>
-  std::pair<typename S1::iterator, bool> emplace(S1& s1, S2& s2, Args&&... args);
-  std::pair<typename S1::iterator, bool> insert(S1& s1, S2& s2, const typename S1::value_type& v);
-  void flush(S2& s2, typename S1::const_iterator itr); 
+template <typename Key, typename Value>
+class UnorderedStore {
+  public:
+    // stl container typedefs...
+    // stl container interface...
+    // store typedefs...
+    // store interface...
+};
+```
+```RedisStore``` provides the same typedefs and interface as ```Store``` and ```UnorderedStore```, but is implemented in terms of a connection to a Redis key-value store. ```RedisStore``` also provides methods for opening and closing connections to Redis key-value stores and a convenience constructor.
+
+Because Redis key-value stores store data as text, ```RedisStore``` takes a third template argument ```IO``` which represents a function object for converting ```Key``` and ```Value``` objects back and forth to and from text. If no object is provided ```RedisStore``` defaults to using the convenience class ```Stream``` which is defined in terms of the ```iostream``` insertion and extraction operators.
+
+```c++
+template <typename K, typename V>
+struct IO {
+  void kread(std::istream& is, K& k);
+  void vread(std::istream& is, V& v);
+  void kwrite(std::ostream& os, const K& k);
+  void vwrite(std::ostream& os, const V& v);
+};
+
+template <typename K, typename V, typename IO=Stream<K,V>>
+class RedisStore {
+  public:
+    // stl container typedefs...
+    // stl container interface...
+    // store typedefs...
+    // store interface...    
+    
+    RedisStore(const string& host, unsigned int port);
+    void connect(const string& host, unsigned int port);
+    bool is_connected() const;
+    void disconnect();
 };
 ```
 
-touch() is invoked whenever <... when ...>. evict() is invoked whenever an item
-is to be removed from s1. 
-
-``` c++
-template <typename S1>
-struct Evict {
-  void touch(typename S1::iterator itr);
-  typename S1::const_iterator evict(S1& s1);
-};
-```
-
-Map kmap()/vmap()/vunmap() are used to convert between types when moving
-key-value pairs back and forth between primary store and backing store.
-
-``` c++
-template <typename DK, typename DV, 
-          typename RK, typename RV>
+```c++
+template <typename DK, typename DV, typename RK, typename RV>
 struct Map {
   RK kmap(const DK& dk);
   RV vmap(const DV& dv);
+  DK kunmap(const RK& rk);
+  DV vunmap(const RV& rv);
   DV vunmap(const DK& dk, const RK& rk, const RV& rv);
 };
-``` 
+
+template <typename K, typename V, typename S, typename M>
+class AdapterStore {
+  public:
+    // stl container typedefs...
+    // stl container interface...
+    // store typedefs...
+    // store interface...
+    
+    AdapterStore(S* backing_store);
+    S* backing_store(S* s);
+};
+```
+
+```c++
+template <typename S>
+struct Evict {
+  void erase(const typename S::k_type& k);
+  void touch(const typename S::k_type& k);
+  typename S::k_type evict();
+  friend void swap(Evict& lhs, Evict& rhs);
+};
+
+template <typename S>
+struct Read {
+  typedef /*...*/ const_iterator;
+
+  void fetch(S& s, const typename S::k_type& k);
+  const_iterator begin();
+  const_iterator end();
+  friend void swap(Read& lhs, Read& rhs);
+};
+
+template <typename S>
+struct Write {
+  void modify(S& s, const typename S::value_type& v);
+  void flush(S& s, const typename S::k_type& k);
+  friend void swap(Write& lhs, Write& rhs);
+};
+
+template <typename S1, typename S2,
+          typename Evict, typename Read, typename Write>
+class Cache {
+  public:
+    // stl container typedefs...
+    // stl container interface...
+    // store typedefs...
+    // store interface... 
+    
+    Cache(S2* s2, size_t capacity);
+    void set_capacity(size_t c);
+    S2* backing_store(S2* s2);
+};
+```
+
+
+
+
