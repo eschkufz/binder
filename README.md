@@ -193,3 +193,39 @@ class Cache {
     S2* backing_store(S2* s2);
 };
 ```
+
+Usage
+---
+```
+#include "include/binder.h"
+using namespace binder;
+using namespace std;
+
+int main() {
+  // A simple store
+  Store<int, char> s1;
+  s1.put(make_pair(1,'a'));
+  s1.get(1);
+  
+  // A simple unordered store
+  UnorderedStore<int, char> s2;
+  for (const auto& p : s1) {
+    s2.put(p);
+  }
+  if (s2.contains(1)) {
+    s2.erase(1);
+  }
+  s2.clear();
+
+  // A redis-backed store
+  RedisStore<double, long> s3("localhost", 6379);
+  
+  // Change the exposed types of s2
+  AdapterStore<double, long, decltype(s2)> s4(&2);
+  
+  // Now that the types match, use s4 as a cache for s3
+  Cache<decltype(s4), decltype(s3)>(&s4, &s3);
+
+  return 0;
+}
+```
