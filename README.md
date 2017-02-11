@@ -134,7 +134,7 @@ function objects which represent policies for ```Evict```-ing data from
 ```S1```, ```Read```-ing data from ```S2``` into ```S1``` and ```Write```-ing
 data from ```S1```  into ```S2```. The ```Cache``` class also provides a
 convenience constructor and methods for modifying its capacity and swapping out
-its backing store. 
+its primary and backing stores. 
 
 The interface for the three policy objects is shown below. ```Evict::erase()```
 is invoked whenever a key is removed from ```S1``` and ```Evict::touch()``` is
@@ -188,8 +188,9 @@ class Cache {
     // store typedefs...
     // store interface... 
     
-    Cache(S2* s2, size_t capacity);
+    Cache(S1* s1, S2* s2, size_t capacity);
     void set_capacity(size_t c);
+    S1* primary_store(S1* s1);
     S2* backing_store(S2* s2);
 };
 ```
