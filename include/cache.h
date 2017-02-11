@@ -115,6 +115,14 @@ class Cache {
       capacity_ = c;
       resize(max_size());
     }
+    S2* backing_store(S2* s2 = nullptr) {
+      auto ret = s2_;
+      if (s2 != nullptr) {
+        clear();
+        s2_ = s2;
+      }
+      return ret;
+    }
 
     // COMPARISON:
     // Container:
