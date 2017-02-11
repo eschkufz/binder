@@ -226,7 +226,7 @@ int main() {
   // Now that the types match, use s4 as a cache for s3
   Cache<decltype(s4), decltype(s3)> s5(&s4, &s3);
 
-  // Do anything with s5 that you would do with an stl container!
+  // Do anything that you would do with an stl container!
   cout << std::max_element(s5.begin(), s5.end()).first << endl;
   
   return 0;
