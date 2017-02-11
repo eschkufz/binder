@@ -151,13 +151,13 @@ class AdapterStore {
     // CAPACITY:
     // Container:
     bool empty() const {
-      return s_ == nullptr ? true : s_->empty();
+      return s_ != nullptr ? s_->empty() : true;
     }
     size_type size() const {
-      return s_ == nullptr ? 0 : s_->size();
+      return s_ != nullptr ? s_->size() : 0;
     }
     size_type max_size() const {
-      return s_ == nullptr ? 0 : s_->max_size();
+      return s_ != nullptr ? s_->max_size() : 0;
     }
 
     // MODIFIERS:
@@ -170,7 +170,7 @@ class AdapterStore {
     // STORE INTERFACE:
     // Common:
     bool contains(const k_type& dk) {
-      return s_ == nullptr ? false : s_->contains(M().kmap(dk));
+      return s_ != nullptr ? s_->contains(M().kmap(dk)) : false;
     }
     v_type get(const k_type& dk) {
       if (s_ == nullptr) {
