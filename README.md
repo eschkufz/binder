@@ -131,7 +131,9 @@ struct Write {
 };
 
 template <typename S1, typename S2,
-          typename Evict, typename Read, typename Write>
+          typename Evict=Lru<S1>, 
+          typename Read=Fetch<S2>, 
+          typename Write=WriteThrough<S2>>
 class Cache {
   public:
     // stl container typedefs...
