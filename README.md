@@ -196,7 +196,7 @@ class Cache {
 
 Usage
 ---
-```
+```c++
 #include "include/binder.h"
 using namespace binder;
 using namespace std;
