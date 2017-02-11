@@ -1,6 +1,6 @@
 #include "gtest/gtest.h"
 #include "include/redis.h"
-#include "test/interface_test.h"
+#include "test/interface.h"
 
 using namespace binder;
 

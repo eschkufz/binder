@@ -28,7 +28,7 @@ class Cache {
     
     // CONSTRUCT/COPY/DESTROY:
     // Container:
-    Cache(S2* s2 = nullptr, size_t c = 16) : s1_(), s2_(s2), capacity_(c) { }
+    Cache(S1* s1 = nullptr, S2* s2 = nullptr, size_t c = 16) : s1_(s1), s2_(s2), capacity_(c) { }
     Cache(const Cache& rhs) = default;
     Cache(Cache&& rhs) = default;
     Cache& operator=(const Cache& rhs) = default;
@@ -38,31 +38,31 @@ class Cache {
     // ITERATORS:
     // Container:
     iterator begin() { 
-      return s1_.begin();
+      return s1_ != nullptr ? s1_->begin() : iterator();
     }
     const_iterator begin() const {
-      return s1_.begin();
+      return s1_ != nullptr ? s1_->begin() : const_iterator();
     }
     iterator end() {
-      return s1_.end();
+      return s1_ != nullptr ? s1_->end() : iterator();
     }
     const_iterator end() const {
-      return s1_.end();
+      return s1_ != nullptr ? s1_->end() : const_iterator();
     }
     const_iterator cbegin() const {
-      return s1_.cbegin();
+      return s1_ != nullptr ? s1_->cbegin() : const_iterator();
     }
     const_iterator cend() const {
-      return s1_.cend();
+      return s1_ != nullptr ? s1_->cend() : const_iterator();
     }
 
     // CAPACITY:
     // Container:
     bool empty() const {
-      return s1_.empty();
+      return s1_ != nullptr ? s1_->empty() : true;
     }
     size_type size() const {
-      return s1_.size();
+      return s1_ != nullptr ? s1_->size() : 0;
     }
     size_type max_size() const {
       return capacity_;
@@ -83,10 +83,13 @@ class Cache {
     // STORE INTERFACE:
     // Common:
     bool contains(const k_type& k) {
-      return s1_.contains(k);
+      return s1_ != nullptr ? s1_->contains(k) : false;
     }
     v_type get(const k_type& k) {
-      if (s1_.contains(k)) {
+      if (s1_ == nullptr || s2_ == nullptr) {
+        return v_type();
+      }
+      if (s1_->contains(k)) {
         e_.touch(k);
       } else if (s2_ != nullptr) {
         r_.fetch(*s2_, k);
@@ -94,18 +97,22 @@ class Cache {
           put(*v);
         }
       }
-      return s1_.get(k);
+      return s1_->get(k);
     }
     void put(const value_type& v) {
-      s1_.put(v);
-      e_.touch(v.first);
-      w_.modify(*s2_, v);
-      resize(max_size());
+      if (s1_ != nullptr && s2_ != nullptr) {
+        s1_->put(v);
+        e_.touch(v.first);
+        w_.modify(*s2_, v);
+        resize(max_size());
+      }
     }
     void erase(const k_type& k) {
-      w_.flush(*s2_, k);
-      e_.erase(k);
-      s1_.erase(k);
+      if (s1_ != nullptr && s2_ != nullptr) {
+        w_.flush(*s2_, k);
+        e_.erase(k);
+        s1_->erase(k);
+      }
     }
     void clear() { 
       resize(0);
@@ -114,6 +121,14 @@ class Cache {
     void capacity(size_t c) {
       capacity_ = c;
       resize(max_size());
+    }
+    S1* primary_store(S1* s1 = nullptr) {
+      auto ret = s1_;
+      if (s1 != nullptr) {
+        clear();
+        s1_ = s1;
+      }
+      return ret;
     }
     S2* backing_store(S2* s2 = nullptr) {
       auto ret = s2_;
@@ -127,7 +142,7 @@ class Cache {
     // COMPARISON:
     // Container:
     friend bool operator==(const Cache& lhs, const Cache& rhs) {
-      return lhs.s1_ == rhs.s1_;
+      return *lhs.s1_ == *rhs.s1_;
     }
     friend bool operator!=(const Cache& lhs, const Cache& rhs) {
       return !(lhs == rhs);
@@ -140,7 +155,7 @@ class Cache {
     }
 
   private:
-    S1 s1_;
+    S1* s1_;
     S2* s2_;
     size_t capacity_;
     E e_;
